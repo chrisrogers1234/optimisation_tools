@@ -1,0 +1,34 @@
+[
+    {
+        "facility":"facility name",
+        "material":"material name",
+        "energy":"Injection energy [MeV]",
+        "column density":"Column density [g/cm^2]",
+        "stripping efficiency":"Probability of fully ionising H-",
+        "energy loss":"Mean energy loss [MeV]"
+    },
+    {
+        "facility":"'FETS ring C'",
+        "material":"carbon",
+        "energy":3.0,
+        "column density":5.0e-6
+    },
+    {
+        "facility":"'FETS ring C'",
+        "material":"carbon",
+        "energy":3.0,
+        "column density":10e-6
+    },
+    {
+        "facility":"'FETS ring C'",
+        "material":"carbon",
+        "energy":3.0,
+        "column density":20e-6
+    },
+    {
+        "facility":"'FETS ring C'",
+        "material":"carbon",
+        "energy":3.0,
+        "column density":30e-6
+    }
+]

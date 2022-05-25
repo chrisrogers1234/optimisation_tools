@@ -1,0 +1,52 @@
+[
+    {
+        "facility":"facility name",
+        "material":"material name",
+        "energy":"Injection energy [MeV]",
+        "column density":"Column density [g/cm^2]",
+        "stripping efficiency":"Probability of fully ionising H-",
+        "energy loss":"Mean energy loss [MeV]"
+    },
+    {
+        "facility":"jparc",
+        "material":"carbon",
+        "energy":400.0,
+        "column density":400.0e-6
+    },
+    {
+        "facility":"kurns",
+        "material":"carbon",
+        "energy":11.0,
+        "column density":20.0e-6
+    },
+    {
+        "facility":"'isis C'",
+        "material":"carbon",
+        "energy":70.0,
+        "column density":100.0e-6
+    },
+    {
+        "facility":"'FETS ring C'",
+        "material":"carbon",
+        "energy":3.0,
+        "column density":20.0e-6
+    },
+    {
+        "facility":"'FETS ring C'",
+        "material":"carbon",
+        "energy":3.0,
+        "column density":5.0e-6
+    },
+    {
+        "facility":"'FETS ring He'",
+        "material":"gaseous_helium",
+        "energy":3.0,
+        "column density":10e-6
+    },
+    {
+        "facility":"'PSB'",
+        "material":"carbon",
+        "energy":160.0,
+        "column density":200e-6
+    }
+]

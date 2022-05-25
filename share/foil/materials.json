@@ -1,0 +1,137 @@
+{
+  "units":{
+    "radiation_length":"cm",
+    "density":"g/cm^3",
+    "ion_energy":"eV",
+    "molecular_mass":"u",
+    "sigma_0,1":{"E_t":"MeV", "a_1":"", "a_2":"", "a_3":"keV",
+                            "a_4":"", "a_5":"keV", "a_6":""},
+    "sigma_-1,0":{"E_t":"MeV", "a_1":"", "a_2":"", "a_3":"keV",
+                            "a_4":"", "a_5":"keV", "a_6":""},
+    "elements_list":[
+        {"name":"", "z":"", "a":"u", "fraction":""}
+    ],
+    "specific_heat":"J/(g K)"
+  },
+  "beryllium":{
+    "radiation_length":65.19,
+    "density":1.848,
+    "ion_energy":63.7,
+    "molecular_mass":-1,
+    "delta":0.14,
+    "sigma_0,1":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
+                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
+    "sigma_-1,0":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
+                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
+    "elements_list":[
+        {"name":"beryllium", "z":4, "a":9.0121831, "fraction":1.0}
+    ],
+    "specific_heat":-1.0
+  },
+  "aluminium":{
+    "radiation_length":24.01,
+    "density":2.699,
+    "ion_energy": 166.0,
+    "molecular_mass":26.9815385,
+    "delta":0.12,
+    "sigma_0,1":{"E_t":1.36e-5, "a_1":6.54e1, "a_2":1.53, "a_3":1.98,
+                                "a_4":-1.8e-2, "a_5":1.15e1, "a_6":1.08},
+    "sigma_-1,0":{"E_t":6.4e-7, "a_1":8.58, "a_2":1.32e-1, "a_3":2.61e1,
+                                "a_4":8.4e-1, "a_5":1.5e3, "a_6":2.1},
+    "elements_list":[
+        {"name":"aluminium", "z":13, "a":26.9815385, "fraction":1.0}
+    ],
+    "specific_heat":-1.0
+  },
+  "carbon":{
+    "radiation_length": 42.70 ,
+    "density": 2.000 ,
+    "ion_energy": 78.0,
+    "molecular_mass":12.0107,
+    "delta":0.10,
+    "sigma_0,1":{"E_t":1.36e-5, "a_1":6.54e1, "a_2":1.53, "a_3":1.98,
+                                "a_4":-1.8e-2, "a_5":1.15e1, "a_6":1.08},
+    "sigma_-1,0":{"E_t":6.4e-7, "a_1":8.58, "a_2":1.32e-1, "a_3":2.61e1,
+                                "a_4":8.4e-1, "a_5":1.5e3, "a_6":2.1},
+    "elements_list":[
+        {"name":"carbon", "z":6, "a":12.0107, "fraction":1.0}
+    ],
+    "specific_heat":0.71
+  },
+  "gaseous_hydrogen":{
+    "radiation_length":63.05,
+    "density":8.376E-05,
+    "ion_energy":19.2,
+    "molecular_mass":2.016,
+    "delta":0.0,
+    "sigma_0,1":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
+                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
+    "sigma_-1,0":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
+                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
+    "elements_list":[
+        {"name":"hydrogen", "z":1, "a":1.00794, "fraction":1.0}
+    ],
+    "specific_heat":-1.0
+  },
+  "gaseous_nitrogen":{
+    "radiation_length": 37.99,
+    "density": 1.165E-03,
+    "ion_energy": 82.0,
+    "molecular_mass":28.007,
+    "delta":0.0,
+    "sigma_0,1":{"E_t":1.36e-5, "a_1":2.59e3,   "a_2":1.78, "a_3":2.69e-1,
+                             "a_4":-3.52e-1, "a_5":5.6,  "a_6":8.99e-1},
+    "sigma_-1,0":{"E_t":7.5e-7, "a_1":4.38e2, "a_2":7.28e-1, "a_3":8.4e-1,
+                                "a_4":2.82e-1,"a_5":4.1e1,   "a_6":1.37},
+    "elements_list":[
+        {"name":"nitrogen", "z":7, "a":14.007, "fraction":1.0}
+    ],
+    "specific_heat":-1.0
+  },
+  "liquid_hydrogen":{
+    "radiation_length":63.05,
+    "density":0.07080,
+    "ion_energy":21.8,
+    "molecular_mass":-1,
+    "delta":0.0,
+    "sigma_0,1":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
+                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
+    "sigma_-1,0":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
+                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
+    "elements_list":[
+        {"name":"hydrogen", "z":1, "a":1.00794, "fraction":1.0}
+    ],
+    "specific_heat":-1.0
+  },
+  "gaseous_helium":{
+    "radiation_length":94.32,
+    "density":1.663E-04,
+    "ion_energy":41.8,
+    "molecular_mass":4.002602,
+    "delta":0.0,
+    "sigma_0,1":{"E_t":1.36e-5, "a_1":6.54e1, "a_2":1.53, "a_3":1.98,
+                                "a_4":-1.8e-2, "a_5":1.15e1, "a_6":1.08},
+    "sigma_-1,0":{"E_t":6.4e-7, "a_1":8.58, "a_2":1.32e-1, "a_3":2.61e1,
+                                "a_4":8.4e-1, "a_5":1.5e3, "a_6":2.1},
+    "elements_list":[
+        {"name":"helium", "z":2, "a":4.002602, "fraction":1.0}
+    ],
+    "specific_heat":-1.0
+  },
+  "carbon_dioxide":{
+    "radiation_length": 36.19 ,
+    "density": 1.842E-03,
+    "ion_energy": 85.0,
+    "molecular_mass":14.0,
+    "delta":0.0,
+    "sigma_0,1":{"E_t":1.36e-5, "a_1":2.01e3, "a_2":1.8, "a_3":3.74e-1,
+                                "a_4":-3.47e-1, "a_5":6.6e0, "a_6":8.55e-1},
+    "sigma_-1,0":{"E_t":-3.1e-6, "a_1":1.00e3, "a_2":5.00e-1, "a_3":5.00e-2,
+                                "a_4":8.0e-2, "a_5":1.0e1, "a_6":9.7e-1},
+    "elements_list":[
+        {"name":"carbon", "z":6, "a":12.0107, "fraction": 0.272916},
+        {"name":"oxygen", "z":8, "a":15.999, "fraction": 0.727084}
+    ],
+    "specific_heat":-1.0
+  }
+}
