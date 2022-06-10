@@ -94,6 +94,17 @@ class PlotG4BL(object):
         eps = det/xboa.common.pdg_pid_to_mass[13]
         return eps
 
+    def get_eps_6d(self, bunch):
+        my_vars = bunch.list_get_hit_variable(
+            ["ct", "energy", "x", "px", "y", "py", "weight"],
+            ["mm", "MeV", "mm", "MeV", "mm", "MeV", ""])
+        cov = numpy.cov([my_vars[i] for i in range(6)], aweights=my_vars[6])
+        det = numpy.linalg.det(cov)**0.5
+        eps = det/xboa.common.pdg_pid_to_mass[13]**3
+        return eps
+
+
+
     def plot_transverse(self, data):
         bunch_list = []
         for bunch in data["bunch_list"]:
@@ -108,11 +119,7 @@ class PlotG4BL(object):
         data["bunch_list"][0].cut({"energy":self.e_min}, operator.lt, global_cut=True)
         data["bunch_list"][0].cut({"energy":self.e_max}, operator.gt, global_cut=True)
 
-        transmission = [bunch.bunch_weight() for bunch in data["bunch_list"]]
-        #for bunch in data["bunch_list"]:
-        #    bunch.transmission_cut(data["bunch_list"][-1], True)
         for bunch in data["bunch_list"]:
-            bunch.conditional_remove({"weight":0.00001}, operator.lt)
             bunch.conditional_remove({"pid":-13}, operator.ne)
             #bunch.conditional_remove({"r":200}, operator.gt)
             ev_repeats = [hit["event_number"] for hit in bunch]
@@ -121,15 +128,20 @@ class PlotG4BL(object):
                 bunch.conditional_remove({"event_number":ev}, operator.eq)
         transmission = [bunch.bunch_weight() for bunch in data["bunch_list"]]
         transmission = [100.0*t/transmission[0] for t in transmission]
+        for bunch in data["bunch_list"]:
+            bunch.transmission_cut(data["bunch_list"][-1], True)
+            bunch.conditional_remove({"weight":0.00001}, operator.lt)
 
-        #for bunch in data["bunch_list"]:
-        #    bunch.transmission_cut(data["bunch_list"][-1], True)
-
-        print([bunch.bunch_weight() for bunch in data["bunch_list"]])
+        print("Weights (plotted)", [bunch.bunch_weight() for bunch in data["bunch_list"]])
+        print("Transmission [%] ", transmission)
         emittance_xy = [bunch.get("emittance", ["x", "y"]) for bunch in data["bunch_list"]]
         emittance_ct = [self.get_eps_long(bunch) for bunch in data["bunch_list"]]
+        emittance_6d_alt = [self.get_eps_6d(bunch) for bunch in data["bunch_list"]]
+        emittance_6d = [emittance_ct[i]*emittance_xy[i]**2 for i in range(len(emittance_ct))]
         print("Transverse emittance\n", emittance_xy)
         print("Longitudinal emittance\n", emittance_ct)
+        print("6D emittance\n", emittance_6d)
+        print("6D emittance alt\n", emittance_6d_alt)
         p_ref = [bunch[0]["p"] for bunch in data["bunch_list"]]
         p = [bunch.get("mean", ["p"]) for bunch in data["bunch_list"]]
         beta = []
@@ -145,13 +157,14 @@ class PlotG4BL(object):
                 emittance_ct[i] = 0.0
         z0 = data["bunch_list"][0][0]["z"]
         z = [(bunch[0]["z"]-z0)/xboa.common.units["m"] for bunch in data["bunch_list"]]
-        print("Longitudinal emittance\n", z)
+        print("z position\n", z)
         figure = matplotlib.pyplot.figure(figsize=(20,10))
         figure.suptitle(data["plot_name"])
         axes = figure.add_subplot(2, 2, 1)
         axes.plot(z, beta)
         axes.set_xlabel("z [m]")
         axes.set_ylabel("$\\beta_\\perp$ [mm]")
+
 
         axes = figure.add_subplot(2, 2, 2)
         axes.plot(z, p, label="Mean p$")
@@ -201,8 +214,7 @@ class PlotG4BL(object):
             parameters = [-99, -99, -99]
 
         axes = axes.twinx()
-        emittance_6d = [emittance_ct[i]*emittance_xy[i]**2 for i in range(len(z))]
-        axes.plot(z, emittance_6d, c="black")
+        axes.plot(z, emittance_6d_alt, c="black")
         axes.set_ylabel("$\\varepsilon_{6d}$ [mm$^3$]")
         #axes.set_ylim([0.0, axes.get_ylim()[1]])
         eps_str = "$\\varepsilon^{eqm,1}_{//}=$"+str(round(parameters[0], 3))+" mm"
@@ -338,8 +350,8 @@ class PlotG4BL(object):
 
 def main():
     run_dir = "output/rectilinear_cooling_v26/"
-    plot_dir = "emittance_plots_cherry-picked_2/"
-    run_dir_glob = run_dir+"*0.2*/"
+    plot_dir = "emittance_plots/"
+    run_dir_glob = run_dir+"*0.2*_3*/"
     file_name = "track_beam_amplitude/cooling_test/output.txt"
     cell_length = 2000.0 # full cell length
     file_format = "icool_for009"
@@ -347,7 +359,7 @@ def main():
     plotter.analysis_list = None
     plotter.e_min = 200.0
     plotter.e_max = 270.0
-    plotter.z_range = [0, 100100]
+    plotter.z_range = [55000, 105100]
     plotter.max_station = 2
     plotter.variables_of_interest = ["__dipole_field__", "__momentum__", "__wedge_opening_angle__"]
     plotter.do_plots()
