@@ -99,7 +99,8 @@ class StoreDataInMemory(object):
             print("Cut", cut_count, "hits using dt_tolerance", self.dt_tolerance)
         return tmp_hit_list_of_lists
 
-    def reallocate_stations(self, list_of_list_of_hits):
+    def reallocate_stations_old(self, list_of_list_of_hits):
+        # this looks buggy, replaced with reallocate_stations below
         if self.station_dt_tolerance <= 0.0:
             return list_of_list_of_hits
         max_station = [max([hit['station'] for hit in hit_list]) for hit_list in list_of_list_of_hits]
@@ -112,6 +113,32 @@ class StoreDataInMemory(object):
                 if hit_1['t'] - hit_0['t'] > self.station_dt_tolerance:
                     hit_1['station'] = hit_0['station']+max_station
                     hit_0 = hit_1
+        return list_of_list_of_hits
+
+    def reallocate_stations(self, list_of_list_of_hits):
+        """
+        Reallocate stations so that multiple hits in the same station, when separated by more than user defined dt,
+        increments the station number by the max_station_number. Simulate station increment when traversing a ring
+        """
+        if self.station_dt_tolerance <= 0.0:
+            return list_of_list_of_hits
+        max_station = [max([hit['station'] for hit in hit_list]) for hit_list in list_of_list_of_hits]
+        max_station = max(max_station)+1 # index for one turn runs from 0 to station inclusive; next turn starts from max_station
+        for hit_list in list_of_list_of_hits:
+            if len(hit_list) <= 1:
+                continue
+            hit_dict = {}
+            for hit in hit_list:
+                station = hit["station"]
+                if station not in hit_dict:
+                    hit_dict[station] = []
+                hit_dict[station].append(hit)
+            for station, station_hit_list in hit_dict.items():
+                station_hit_list = sorted(station_hit_list, key = lambda hit: hit["t"])
+                for i, hit1 in enumerate(station_hit_list[1:]):
+                    hit0 = station_hit_list[i]
+                    if hit1["t"] - hit0["t"] > self.station_dt_tolerance:
+                        hit1["station"] += max_station
         return list_of_list_of_hits
 
     def no_coordinate_transform(self, hit_list_of_lists):
@@ -372,7 +399,10 @@ class OpalTracking(TrackingBase):
             if abs(hit["z"]) > 1e-9:
                 print("Attempt to make hit with z non-zero", hit["z"])
                 raise RuntimeError("z is not available in distribution input")
-            print(x, px, y, py, t, pz, file=fout)
+            if False:
+                print(x, px, y, py, t, pz, file=fout)
+            else:
+                print(x, px, t, pz, y, py, file=fout)
         fout.close()
         self.cleanup()
         old_time = time.time()
@@ -414,7 +444,7 @@ class OpalTracking(TrackingBase):
                 pass
         line = "0"
         line_number = 0
-        while line != "" and len(fin_dict) > 0:
+        while line != "" and len(fin_list) > 0:
             line_number += 1
             for fin, station in fin_list:
                 line = fin.readline()
@@ -431,7 +461,7 @@ class OpalTracking(TrackingBase):
         self.last = self.pass_through_analysis.finalise()
         return self.last
 
-    def read_one_ascii_line(self, line, station): 
+    def read_one_ascii_line(self, line, tup): 
         words = line.split()
         hit_dict = {}
         for key in "pid", "mass", "charge":
@@ -440,8 +470,9 @@ class OpalTracking(TrackingBase):
             hit_dict[key] = float(words[i+1])*1000.
         for i, key in enumerate(["px", "pz", "py"]):
             hit_dict[key] = float(words[i+4])*self.ref["mass"]
-        hit_dict["event_number"] = int(words[7])
-        hit_dict["station"] = station
+        station, ev = tup
+        hit_dict["event_number"] = int(ev)
+        hit_dict["station"] = int(station)
         hit_dict["t"] = float(words[9])
         hit = Hit.new_from_dict(hit_dict, "energy")
         return hit_dict["event_number"], hit
@@ -512,6 +543,6 @@ class OpalTracking(TrackingBase):
 
     h5_key_to_xboa_key = {"y":"x", "z":"y", "x":"z", "time":"t",
                           "py":"px", "pz":"py", "px":"pz", "id":"event_number"}
-    units = {"x":1000., "y":1000., "z":1000.}
+    units = {"x":1000., "y":1000., "z":1000., "t":1e9}
 
     print_keys = ['x', 'y', 'z', 'px', 'py', 'pz', 'kinetic_energy', 't']

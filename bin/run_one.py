@@ -4,6 +4,7 @@ import sys
 import importlib
 import subprocess
 import datetime
+import json
 
 import numpy
 import ROOT
@@ -19,6 +20,16 @@ import optimisation_tools.analysis.track_bump
 import optimisation_tools.analysis.track_beam
 
 from optimisation_tools.utils import utilities
+
+MODULES = [
+    ("find_closed_orbits_4d", optimisation_tools.analysis.find_closed_orbits_4d),
+    ("find_tune", optimisation_tools.analysis.find_tune),
+    ("find_da", optimisation_tools.analysis.find_da),
+    ("find_bump_parameters", optimisation_tools.analysis.find_bump_parameters),
+    ("build_bump_surrogate_model", optimisation_tools.analysis.build_bump_surrogate_model),
+    ("track_bump", optimisation_tools.analysis.track_bump),
+    ("track_beam", optimisation_tools.analysis.track_beam),
+]
 
 def output_dir(config, config_file_name):
     output_dir = config.run_control["output_dir"]
@@ -38,8 +49,11 @@ def output_dir(config, config_file_name):
         git_string += subprocess.check_output(["git", "status"]).decode('unicode_escape')
     except Exception:
         git_string += "Error calling git"
-    fout = open(output_dir+"/status", "w")
-    print(git_string, file=fout)
+    with open(output_dir+"/git_status", "w") as fout:
+        print(git_string, file=fout)
+    with open(output_dir+"/subs_list.json", "w") as fout:
+        print(json.dumps(config.substitution_list, indent=2), file=fout)
+
 
 def master_substitutions(config):
     xboa.common.substitute(config.tracking["master_file"], config.tracking["lattice_file"], config.master_substitutions)
@@ -51,21 +65,15 @@ def main():
     ROOT.gErrorIgnoreLevel = config.run_control["root_verbose"]
     if config.run_control["random_seed"] != None:
         numpy.random.seed(config.run_control["random_seed"])
-    #master_substitutions(config)
-    if config.run_control["find_closed_orbits_4d"]:
-        optimisation_tools.analysis.find_closed_orbits_4d.main(config)
-    if config.run_control["find_tune"]:
-        optimisation_tools.analysis.find_tune.main(config)
-    if config.run_control["find_da"]:
-        optimisation_tools.analysis.find_da.main(config)
-    if config.run_control["find_bump_parameters"]:
-        optimisation_tools.analysis.find_bump_parameters.main(config)
-    if config.run_control["build_bump_surrogate_model"]:
-        optimisation_tools.analysis.build_bump_surrogate_model.main(config)
-    if config.run_control["track_bump"]:
-        optimisation_tools.analysis.track_bump.main(config)
-    if config.run_control["track_beam"]:
-        optimisation_tools.analysis.track_beam.main(config)
+    for name, module in MODULES:
+        if config.run_control[name]:
+            try:
+                module.main(config)
+            except Exception:
+                if "fail_on_error" not in config.run_control or config.run_control["fail_on_error"]:
+                    raise
+                else:
+                    sys.excepthook(*sys.exc_info())
     print("Finished with output in", config.run_control["output_dir"])
 
 if __name__ == "__main__":

@@ -14,8 +14,9 @@ numpy.set_printoptions(linewidth=200)
 from xboa.hit import Hit
 import xboa.common
 
-from PyOpal.polynomial_coefficient import PolynomialCoefficient
-from PyOpal.polynomial_map import PolynomialMap
+#from PyOpal.polynomial_coefficient import PolynomialCoefficient
+#from PyOpal.polynomial_map import PolynomialMap
+from optimisation_tools.utils.polynomial_fitter import PolynomialFitter
 import optimisation_tools.utils.utilities as utilities
 from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransferMatrix
 
@@ -99,7 +100,7 @@ class ClosedOrbitFinder4D(object):
         return track_list
 
     def get_decoupled(self, tm):
-        m = tm.get_coefficients_as_matrix()
+        m = tm
         print("get decoupled - before cut")
         for row in m:
             for element in row:
@@ -118,16 +119,17 @@ class ClosedOrbitFinder4D(object):
     def get_co(self, tm):
         # \vec{x} = \vec{m} + \matrix{M} \vec{x}
         # Solve (\matrix{1} - \matrix{M}) \vec{x} = \vec{m}
-        m = tm.get_coefficients_as_matrix()
+        m = tm
         print("TM:")
         for i, row in enumerate(m):
             m[i] = row[0:5]
-        print(self.str_matrix(m))
+        #print(self.str_matrix(m, fmt="20.6f"))
         try:
             dm = self.get_decoupled(tm)
+            print(self.str_matrix(m, fmt="20.6f"))
             print("Determinant:  ", numpy.linalg.det(dm.m))
             print("Symplecticity:")
-            print(self.str_matrix(dm.simplecticity(dm.m), fmt="20.2f"))
+            print(self.str_matrix(dm.simplecticity(dm.m), fmt="20.6f"))
             print("Tune:", [dm.get_phase_advance(i)/math.pi/2. for i in range(2)])
         except Exception:
             sys.excepthook(*sys.exc_info())
@@ -184,7 +186,16 @@ class ClosedOrbitFinder4D(object):
                 continue
             coefficients += [PolynomialCoefficient(sum_index, j, 0.0) for j in range(4)]
         tm = PolynomialMap.least_squares(tm_list_in, tm_list_out, 1, coefficients)
+        return tm.get_coefficients_as_matrix()
+
+    def fit_matrix_2(self, tm_list_in, tm_list_out):
+        tm_list_in = numpy.array(tm_list_in)
+        tm_list_out = numpy.array(tm_list_out)
+        fitter = PolynomialFitter(4)
+        tm = fitter.fit_transfer_map(tm_list_in, tm_list_out)
+        #fitter.print_array(tm)
         return tm
+
 
     def get_tm(self, seeds, deltas, cell_list, final_subs=False):
         dim = len(seeds)
@@ -279,7 +290,7 @@ class ClosedOrbitFinder4D(object):
                 sys.excepthook(*sys.exc_info())
                 break
             seeds = new_seeds
-            tm = self.fit_matrix(tm_list_in, tm_list_out)
+            tm = self.fit_matrix_2(tm_list_in, tm_list_out)
             new_co, dm = self.get_co(tm)
             print("New closed orbit", new_co)
             self.print_ref_track(ref_track, seeds, dm)
@@ -291,8 +302,6 @@ class ClosedOrbitFinder4D(object):
             #new_seeds = [seeds[i]+x for i, x in enumerate(new_co)]
             new_seeds = [x for i, x in enumerate(new_co)]
         print("Finished iteration with deltas", deltas, "rms", sum([d*d for d in deltas])**0.5)
-        if tm:
-            tm = tm.get_coefficients_as_matrix()
         output = {
             "seed":seeds,
             "tm":tm,
@@ -369,12 +378,13 @@ class ClosedOrbitFinder4D(object):
                         print("\n*****************")
                         print("Attempting to find the tune after minuit... raised an exception; lattice may be unstable.")
                         print("*****************\n")
+                        sys.excepthook(*sys.exc_info())
                 try:
                     self.output_list[-1].append(output)
                     deltas = self.config_co["deltas"][0:len(self.var_list)]
                     tm_list_of_lists, a_track = self.get_tm(output["seed"], deltas, None, "final_subs_overrides")
                     output["ref_track"] = [hit.dict_from_hit() for hit in a_track]
-                    output["tm_list"] = [self.fit_matrix(tm_list_of_lists[0], tm_list).get_coefficients_as_matrix() for tm_list in tm_list_of_lists]
+                    output["tm_list"] = [self.fit_matrix_2(tm_list_of_lists[0], tm_list) for tm_list in tm_list_of_lists]
                     self.print_ref_track(a_track, output["seed"], None)
                     self.track_many([], 0.0, "plotting_subs")
                 except Exception:
@@ -415,7 +425,10 @@ class ClosedOrbitFinder4D(object):
                 self.minuit.FixParameter(i)
 
         self.minuit.SetFCN(self.minuit_function)
-        self.minuit.Command("SIMPLEX "+str(n_iterations)+" "+str(target_score))
+        try:
+            self.minuit.Command("SIMPLEX "+str(n_iterations)+" "+str(target_score))
+        except Exception:
+            print(f"Terminated after {self.iteration_number}/{n_iterations} iterations")
         return self.get_minuit_hit()
 
     def get_minuit_hit(self):
@@ -459,6 +472,8 @@ class ClosedOrbitFinder4D(object):
         print("Total", score[0])
         self.minuit_score_list.append(score[0])
         self.iteration_number += 1
+        if self.iteration_number > self.config_co["minuit_iterations"]:
+            raise StopIteration("Max iterations exceeded")
 
     run_index = 1
 

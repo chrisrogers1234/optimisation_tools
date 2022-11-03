@@ -76,15 +76,16 @@ class PlotProbes(object):
         self.tracking.set_file_format("hdf5")
         self.tracking.name_dict
         self.plot_dir = plot_dir
-        my_config = config.Config()
+        my_config = config.Config(None, None)
         my_config.tracking["verbose"] = 100
-        my_config.tracking["station_dt_tolerance"] = 1000.0
+        my_config.tracking["station_dt_tolerance"] = 10.0
         my_config.tracking["dt_tolerance"] = -1.0
         my_config.tracking["analysis_coordinate_system"] = "azimuthal"
         self.extras = ['t', 'event_number', 'kinetic_energy']
         self.extras_labels = ['time [ns]', 'event number', 'Kinetic Energy [MeV]']
         self.probe_data = optimisation_tools.opal_tracking._opal_tracking.StoreDataInMemory(my_config)
         self.tracking.pass_through_analysis = self.probe_data
+        self.tracking.verbose = 0
         self.cut_list_1 = []
         self.cut_list_2 = []
         self.transfer_matrix_type = TwoDTransferMatrix
@@ -98,8 +99,8 @@ class PlotProbes(object):
         self.fig_list = []
         self.shared_range = []
         self.s = 1
-        self.f_size = 20
-        self.l_size = 14
+        self.f_size = 15
+        self.l_size = 10
         self.ring_tof = 1060
         self.station_by_tof = True
         self.m_index = 1.31
@@ -108,7 +109,7 @@ class PlotProbes(object):
         self.var_list = ["x", "x'", "y", "y'"]
         self.do_individual_plots = True
         self.station_lambda = lambda station_list: station_list[0:1000]
-        self.do_decoupled = False
+        self.plot_space = "physical"
         self.injected_turn = []
         self.set_plot_limits(probe)
 
@@ -136,6 +137,7 @@ class PlotProbes(object):
         self.stations = {}
         for hit_list in self.probe_data.last:
             for hit in hit_list:
+                print("Add station", hit["station"])
                 if self.station_by_tof:
                     hit["station"] = int(hit["t"]/self.ring_tof)
                 if hit["station"] not in self.stations:
@@ -285,21 +287,22 @@ class PlotProbes(object):
             if not self.do_individual_plots:
                 continue
             for name, hit_list, not_list in [("", h_list, n_list)]:#, ("not-", [], n_list), ("hit-", h_list, [])]:
-                if self.do_decoupled:
-                    figure, axis_list = optimisation_tools.utils.utilities.setup_da_figure_decoupling(False)
-                    self.plot_phase_space(axis_list[3], hit_list, not_list, 5, 7, z_axis, station)
-                    self.plot_phase_space(axis_list[4], hit_list, not_list, 5, 6, z_axis, station)
-                    self.plot_phase_space(axis_list[5], hit_list, not_list, 7, 8, z_axis, station)
-                    ax_index = 6
-                else:
-                    figure, axis_list = optimisation_tools.utils.utilities.setup_da_figure_regular(False)
+                figure, axis_list = optimisation_tools.utils.utilities.setup_da_figure_single(False)
+                if self.plot_space == "decoupled":
+                    self.plot_phase_space(axis_list[0], hit_list, not_list, 5, 7, z_axis, station)
+                    self.plot_phase_space(axis_list[1], hit_list, not_list, 5, 6, z_axis, station)
+                    self.plot_phase_space(axis_list[2], hit_list, not_list, 7, 8, z_axis, station)
+                elif self.plot_space == "physical":
+                    self.plot_phase_space(axis_list[0], hit_list, not_list, 1, 3, z_axis, station)
+                    self.plot_phase_space(axis_list[1], hit_list, not_list, 1, 2, z_axis, station)
+                    self.plot_phase_space(axis_list[2], hit_list, not_list, 3, 4, z_axis, station)
                     ax_index = 3
-                self.plot_phase_space(axis_list[0], hit_list, not_list, 1, 3, z_axis, station)
-                self.plot_phase_space(axis_list[1], hit_list, not_list, 1, 2, z_axis, station)
-                self.plot_phase_space(axis_list[2], hit_list, not_list, 3, 4, z_axis, station)
-                self.plot_phase_space(axis_list[ax_index+0], hit_list, not_list, 10, 12, z_axis, station)
-                self.plot_phase_space(axis_list[ax_index+1], hit_list, not_list, 9, 10, z_axis, station)
-                self.plot_phase_space(axis_list[ax_index+2], hit_list, not_list, 11, 12, z_axis, station)
+                elif self.plot_space == "action_angle":
+                    self.plot_phase_space(axis_list[0], hit_list, not_list, 10, 12, z_axis, station)
+                    self.plot_phase_space(axis_list[1], hit_list, not_list, 9, 10, z_axis, station)
+                    self.plot_phase_space(axis_list[2], hit_list, not_list, 11, 12, z_axis, station)
+                else:
+                    raise RuntimeError(f"Did not recognise plot space {self.plot_space}")
                 if name == "":
                     self.title_text_2 = "showing good and bad hits"
                 elif name == "not-":
@@ -310,15 +313,17 @@ class PlotProbes(object):
                     self.title_text_2 = name
                 #self.suptitle(figure, station, hit_list, not_list)
                 station_str = str(station).rjust(3, '0')
-                figure.suptitle("Station: "+str(station)+"\nwith "+str(len(hit_list))+"/"\
-                                +str(len(hit_list)+len(not_list))+" good hits and "+str(self.n_events)+" total injected")
+                suptitle = "Station: "+str(station)+"\nwith "+str(len(hit_list))+"/"\
+                                +str(len(hit_list)+len(not_list))+" good hits and "+str(self.n_events)+" total injected"
+                if self.do_suptitle:
+                    figure.suptitle(suptitle)
                 figure.savefig(self.plot_dir+"/transverse_station-"+name+station_str+".png")
                 self.fig_list.append(figure)
                 if station != 0:
                     matplotlib.pyplot.close(figure)
                 figure = matplotlib.pyplot.figure(figsize=(10, 6))
-                figure.suptitle("Station: "+str(station)+"\nwith "+str(len(hit_list))+"/"\
-                                +str(len(hit_list)+len(not_list))+" good hits")
+                if self.do_suptitle:
+                    figure.suptitle(suptitle)
                 axes = figure.add_subplot(1, 1, 1,  position=[0.15, 0.2, 0.3, 0.7])
                 self.plot_phase_space(axes, hit_list, not_list, 13, 14, z_axis, station)
                 axes = figure.add_subplot(1, 1, 1,  position=[0.6, 0.2, 0.3, 0.3])
@@ -334,10 +339,10 @@ class PlotProbes(object):
 
     def set_plot_limits(self, probe):
         self.lim_dict = {
-            1:[3970, 4030],
-            2:[-0.14, -0.08],
-            3:[-20, 20],
-            4:[-0.02, 0.02],
+            1:[4100, 4200],
+            2:[0.050, 0.250],
+            3:[-50, 50],
+            4:[-0.05, 0.05],
             5:[-70, 70],
             6:[-0.01, 0.01],
             7:[-100, 100],
@@ -372,7 +377,7 @@ class PlotProbes(object):
             z_list = [hit[z_axis] for hit in hit_list]
         else:
             z_list = [self.colour(hit) for hit in hit_list]
-        print("Z List:", z_list)
+        #print("Z List:", z_list)
         x_not_list = [hit[x_axis] for hit in not_list]
         y_not_list = [hit[y_axis] for hit in not_list]
         labels = {
@@ -445,6 +450,8 @@ class PlotProbes(object):
         values = [v for v in self.colour_dict.values()]
         min_value, max_value = min(values), max(values)
         delta_value = max_value-min_value
+        if delta_value == 0:
+            delta_value = 1
         for key in self.colour_dict:
             self.colour_dict[key] = (self.colour_dict[key] - min_value)/delta_value
 
@@ -491,8 +498,9 @@ def main(cut_station):
     #glob_dir = "output/arctan_baseline/single_turn_injection/tracking_simulation_ref-only-hor/26-mm/rf-and-foil"
     #amp_dir = "output/2022-03-01_baseline/correlated_painting/bump_quest_v16"
     #glob_dir = amp_dir+"/track_bump_th_090_r0_-*/track_beam/da"
-    amp_dir = "output/2022-03-01_baseline/correlated_painting/tracking_v15"
-    glob_dir = amp_dir+"/track_beam/injected_beam/"
+    co_dir = "output/2022-07-01_baseline/bump_quest_v11/track_bump_r0=-000_by=0.00_k=8.0095"
+    amp_dir = "output/2022-07-01_baseline/bump_quest_v11/track_bump_r0=-000_by=0.00_k=8.0095"
+    glob_dir = amp_dir+"/track_beam/da/"
     #glob_dir = "output/2022-03-01_baseline/baseline/track_beam/forwards"
     #glob_dir = "output/2022-03-01_baseline/correlated_painting/tracking/track_beam/grid"
     delta = []
@@ -504,7 +512,7 @@ def main(cut_station):
         print("   ", a_dir)
     for a_dir in sorted(glob.glob(glob_dir)):
         #a_dir = "output/arctan_baseline/baseline_test_rf_2/track_beam_rf_on"
-        for probe in ["RINGPROBE01", "FOILPROBE_1"]: # 
+        for probe in ["RINGPROBE01"]:
             plot_dir = a_dir+"/plot_probe_phase/"+probe
             if do_individual_plots:
                 if os.path.exists(plot_dir):
@@ -514,10 +522,12 @@ def main(cut_station):
             for_glob_name = a_dir+"/"+str(probe)+".h5"
             forwards_file_name_list = glob.glob(for_glob_name)
             plotter = PlotProbes(forwards_file_name_list, probe, plot_dir)
+            plotter.station_lambda = lambda station_list: station_list
+            plotter.do_suptitle = False 
             plotter.m_index = 0.0
             plotter.do_individual_plots = do_individual_plots
             plotter.co_param_list = [{
-                "filename":os.path.join(amp_dir, "closed_orbits_cache"),
+                "filename":os.path.join(co_dir.replace("track", "find"), "closed_orbits_cache"),
                 "ref_to_bump_station_mapping":dict([(i,i) for i in range(1001)]),
             },]
             try:
@@ -561,6 +571,6 @@ def main(cut_station):
     figure.savefig(amp_dir+"/amplitude_vs_bump.png")
 
 if __name__ == "__main__":
-    main(cut_station=100)
+    main(cut_station=25)
     matplotlib.pyplot.show(block=False)
     #input("Done")

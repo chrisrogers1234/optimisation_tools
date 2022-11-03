@@ -1,4 +1,5 @@
 import numpy
+import math
 from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransferMatrix
 
 class TwoDTransferMatrix(DecoupledTransferMatrix):
@@ -22,9 +23,11 @@ class TwoDTransferMatrix(DecoupledTransferMatrix):
         self.v_t = numpy.zeros([self.dim*2, self.dim*2]) # real
         self.r = numpy.identity(2*self.dim)
         self.r_inv = numpy.identity(2*self.dim)
+        self.phase = [None]*self.dim
         for i in range(self.dim):
             j=2*i
             v_2d = self.get_v2d(self.m[j:2+j, j:2+j])
+            self.phase[i] = self.setup_phase_advance(self.m[j:2+j, j:2+j])
             self.v_t[j:2+j, j:2+j] = v_2d
         print("VT", self.v_t, numpy.linalg.det(self.v_t))
         try:
@@ -35,6 +38,19 @@ class TwoDTransferMatrix(DecoupledTransferMatrix):
             print("ERRORROROEEORO")
             self.chol = None
             self.chol_inv = None
+
+    def setup_phase_advance(self, tm):
+        cosmu = (tm[0,0]+tm[1,1])/2.0
+        if abs(cosmu) > 1.0:
+            return 0
+        else:
+            phase_advance = math.acos(cosmu)
+            # if M*(1, 0) < 0 then one cell puts a particle in bottom two 
+            # quadrants i.e. phase advance > pi 
+            if tm[1,0] > 0:
+                phase_advance = 2*math.pi - phase_advance
+        return phase_advance
+
 
     def get_v2d(self, m2d):
         cosmu = (m2d[0,0]+m2d[1,1])/2

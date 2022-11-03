@@ -1,6 +1,7 @@
 """
 Plot a single closed orbit (once tracking has finished)
 """
+import time
 import sys
 import copy
 import os
@@ -21,10 +22,11 @@ import ROOT
 
 import xboa.common
 
-import PyOpal.parser
-import PyOpal.field
+import pyopal.objects.parser
+import pyopal.objects.field
 import optimisation_tools.utils.utilities
 from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransferMatrix
+from optimisation_tools.utils.twod_transfer_matrix import TwoDTransferMatrix
 DecoupledTransferMatrix.det_tolerance = 1e-2
 
 class GetFields(object):
@@ -52,8 +54,8 @@ class GetFields(object):
         fin = open(source, "r")
         fout = open(target, "w")
         for line in fin.readlines():
-            if "ENABLEHDF5=" in line:
-                line = "Option, ENABLEHDF5=False; // plotfields HACK!!! \nOption, ECHO=False; // plotfields HACK!!! \n"
+            if "ASCIIDUMP=" in line:
+                line = "Option, ASCIIDUMP=True; // plotfields HACK!!! \n"
             if "ENABLEHDF5=" in line:
                 line = "Option, ENABLEHDF5=False; // plotfields HACK!!! \n"
             if "REAL N_TURNS=" in line:
@@ -62,12 +64,13 @@ class GetFields(object):
                 line = "BOOL DO_MAGNET_FIELD_MAPS=False; // plotfields HACK!!! \n"
             fout.write(line)
         self.lattice_file = target
+        fin.close()
 
     def load_lattice(self):
         here = os.getcwd()
         a_dir, a_file = os.path.split(self.lattice_file)
         os.chdir(a_dir)
-        PyOpal.parser.initialise_from_opal_file(a_file)
+        pyopal.objects.parser.initialise_from_opal_file(a_file)
         os.chdir(here)
 
     def get_derivative(self, var1, var2, x, y, z, t):
@@ -110,7 +113,7 @@ class GetFields(object):
     def get_field(self, x, y, z, t):
         phi = math.atan2(y, x)
         oob, bx, by, bz, ex, ey, ez = \
-                                PyOpal.field.get_field_value(x, y, z, t)
+                                pyopal.objects.field.get_field_value(x, y, z, t)
         btot = (bx**2+by**2+bz**2)**0.5
         br = bx*math.cos(phi)+by*math.sin(phi)
         bphi =  -bx*math.sin(phi)+by*math.cos(phi)
@@ -207,14 +210,17 @@ class LoadOrbit(object):
         for item in heading:
             self.orbit[item] = []
         line = fin.readline().rstrip("\n")
+        line_count = 0
         while line != "":
             line = fin.readline()
+            line_count += 1
             words = line.rstrip("\n").split()
             if len(words) != len(heading):
                 print("Line\n  "+line+"\nmismatched to heading\n  "+str(heading)+"\nin parse_file "+self.file_name)
             else:
                 words = [self.types[i](x)*self.units[i] for i, x in enumerate(words)]
-                if words[0] not in self.allowed_id:
+                if self.allowed_id and words[0] not in self.allowed_id:
+                    #print("Rejecting id", words[0], self.allowed_id)
                     continue
                 is_okay = self.test_function == None or not self.test_function(words)
                 if not is_okay:
@@ -222,7 +228,7 @@ class LoadOrbit(object):
                     break
                 for i, item in enumerate(heading):
                     self.orbit[item].append(words[i])
-        print("Got", len(self.orbit["x"]), "lines from file "+self.file_name)
+        print("Got", len(self.orbit["x"]), "/", line_count, "lines from file "+self.file_name)
 
     @classmethod
     def fix_domain(self, phi):
@@ -282,6 +288,13 @@ class LoadOrbit(object):
                 y = (y1-y0)/(x1-x0)*(x-x0)+y0
                 y_list_of_lists[var_yi][xi] = y
         return [x_list]+y_list_of_lists
+
+    def get_kinetic_energy(self, index):
+        px = self.orbit["px"][index]
+        py = self.orbit["py"][index]
+        pz = self.orbit["pz"][index]
+        ke = (px**2+py**2+pz**2+self.p_mass**2)**0.5-self.p_mass
+        return ke
 
     p_mass = xboa.common.pdg_pid_to_mass[2212]
     heading = ["id", "x", "px", "y", "py", "z", "pz"]
@@ -373,6 +386,7 @@ class PlotFields(object):
         self.do_pipe = False
         self.polygon_plotter = polygon_plotter
         self.log_plotter = None
+        self.azimuthal_field_plot = ['br', 'bphi', 'bz']
 
     def field_fig(self, job_name, centre, range_x, range_y, do_elevation=False):
         """
@@ -438,23 +452,40 @@ class PlotFields(object):
         figure.suptitle(job_name)
         return figure
 
+    def one_field_fig(self, job_name, centre, range_x, range_y, field_var):
+        figure = matplotlib.pyplot.figure()
+        axes = figure.add_subplot(1, 1, 1) 
+        self.plot_2d(figure, axes, centre, range_x, range_y, [-self.b0, self.b0], "x", "y", field_var)
+        if self.polygon_plotter != None:
+            self.polygon_plotter.plot(axes)
+        if self.log_plotter != None:
+            self.log_plotter.plot(axes)
+        for orbit in self.orbit_list:
+            orbit.plot_2d(axes, "x", "y", range_x, range_y)
+        axes.legend()
+        return figure
+
     def azimuthal_fig(self, job_name, range_phi, time_plot_phi = None):
         figure = matplotlib.pyplot.figure(figsize=(20, 10))
-        axes = figure.add_subplot(2, 2, 1) 
+        axes = figure.add_subplot(2, 2, 1)
+        optimisation_tools.utils.utilities.setup_large_figure(axes)
         for orbit in self.orbit_list:
             orbit.plot_2d(axes, 'phi', 'z', range_phi, None)        
         #axes.legend()
 
-        axes = figure.add_subplot(2, 2, 2) 
+        axes = figure.add_subplot(2, 2, 2)
+        optimisation_tools.utils.utilities.setup_large_figure(axes)
         for orbit in self.orbit_list:
             orbit.plot_2d(axes, 'phi', 'r', range_phi, None)
         #axes.legend()
 
         axes = figure.add_subplot(2, 2, 3)
-        self.plot_1d_orbit(axes, self.orbit_list[0], 'phi', ['br', 'bphi', 'bz'], range_phi, None) #, "curl_b", "div_b"
+        optimisation_tools.utils.utilities.setup_large_figure(axes)
+        self.plot_1d_orbit(axes, self.orbit_list[0], 'phi', self.azimuthal_field_plot, range_phi, None)
 
-        axes = figure.add_subplot(2, 2, 4)
         if time_plot_phi != None:
+            axes = figure.add_subplot(2, 2, 4)
+            optimisation_tools.utils.utilities.setup_large_figure(axes)
             centre = [0.0, 0.0, 0.0, 0.0]
             range_x = [0.0, 25000]
             self.plot_1d(axes, centre, range_x, [-0.1, 0.1], 't', ['btot'], None, 'time')
@@ -657,7 +688,7 @@ class PlotFields(object):
                     cmin=min_z, cmax=max_z, cmap=self.cmap, vmin=-vtot, vmax=vtot)
         axes.set_xlabel(Labels.labels[var_x])
         axes.set_ylabel(Labels.labels[var_y])
-        axes.set_title(Labels.labels[var_z])
+        matplotlib.pyplot.text(1.25, 0.9, Labels.labels[var_z], rotation=90, transform=axes.transAxes)
         if self.do_pipe:
             self.cartesian_lines(axes)
         figure.colorbar(hist[3], ax=axes)
@@ -811,7 +842,7 @@ class LoadH5(object):
                 }
                 self.phi_domain(item)
                 data.append(item)
-                #print("H5 Loaded", item)
+                print("H5", [(var, format(item[var], "4.5g")) for var in ('r', 'phi', 'pr', 'pphi')])
         print("... found", len(data), "points and after cuts", end=" ")
         data = self.cut(data)
         print("...", len(data), "points")
@@ -856,10 +887,11 @@ class LoadH5(object):
     azimuthal_domain = [-180.0, 180.0]
 
 class LoadClosedOrbit(object):
-    def __init__(self, file_name):
+    def __init__(self, file_name, tm_is_decoupled=False):
         self.ref_track = []
         self.tm = None
         self.file_name = file_name
+        self.tm_is_decoupled = True
         self.load_closed_orbits()
 
     def load_closed_orbits(self):
@@ -872,7 +904,10 @@ class LoadClosedOrbit(object):
             hit = xboa.hit.Hit.new_from_dict(hit)
             self.ref_track.append(hit)
         tm = [row[1:5] for row in co["tm"]]
-        self.tm = DecoupledTransferMatrix(tm, True)
+        if self.tm_is_decoupled:
+            self.tm = TwoDTransferMatrix(tm, True)
+        else:
+            self.tm = DecoupledTransferMatrix(tm, True)
 
     def get_ref_track(self, station):
         try:
@@ -900,6 +935,8 @@ class PlotOrbit(object):
         axes.scatter(x_list, y_list, label=self.name, s=20, marker="o", facecolors="none", edgecolors=color)
 
     def do_line_wraps(self, x_list, y_list):
+        if not len(x_list):
+            return [[x_list, y_list]]
         delta_x = max(x_list)-min(x_list)
         break_index_list = []
         for i, x in enumerate(x_list[1:]):
@@ -924,7 +961,7 @@ class PlotOrbit(object):
         x_list = [self.orbit.orbit[var_x][i] for i in i_list]
         y_list = [self.orbit.orbit[var_y][i] for i in i_list]
         if len(x_list) == 0:
-            print("Failed to find any points for orbit plot")
+            print("Failed to find any points for orbit plot from file name", self.orbit.file_name)
             return
         axes.set_xlabel(Labels.labels[var_x])
         axes.set_ylabel(Labels.labels[var_y])
@@ -941,7 +978,7 @@ class PlotOrbit(object):
             limits = axes.get_xlim()
             axes = axes.twiny()
             axes.set_xlim([limits[0]*self.r0*2.0*math.pi/360.0, limits[1]*self.r0*2.0*math.pi/360.0])
-            axes.set_xlabel("$r_0\\phi$ [m] for $r_0$ = "+str(self.r0)+" m")
+            axes.set_xlabel(f"$r_0\\phi$ [m] for $r_0$ = {self.r0} m")
 
 class PlotPolygon(object):
     def __init__(self, n_cells, cell_length):       

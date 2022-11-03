@@ -9,7 +9,7 @@ import time
 import numpy
 import xboa.hit
 
-import optimisation_tools.plotting.plot_fields
+#import optimisation_tools.plotting.plot_fields
 
 from optimisation_tools.opal_tracking import OpalTracking
 import optimisation_tools.utils.utilities as utilities
@@ -31,6 +31,10 @@ class BeamGen(object):
 
     def gen_beam(self):
         raise NotImplementedError("Not implemented")
+
+    def update_subs(self, subs):
+        # if required, update the substitutions
+        return subs
 
     @classmethod
     def beam_setting(cls, beam, config):
@@ -346,11 +350,14 @@ class Recycle(BeamGen):
             tracking = self.tracking_store[setting_name]
         hit_list = [hit_list[station] for hit_list in self.last_tracking if station < len(hit_list)]
         hit_list = self.offset(hit_list)
+        print("Hits for recycling")
+        for hit in hit_list:
+            print(hit)
         return hit_list
  
     def offset(self, hit_list):
         if "offset" not in self.beam:
-            return
+            return hit_list
         offset = self.beam["offset"]
         print("Offsetting", offset)
         for hit in hit_list:
@@ -425,23 +432,21 @@ class TrackBeam(object):
         self.tracking = utilities.setup_tracking(self.config,
                                                   setting["probe_files"],
                                                   setting["beam"]["energy"])
-        utilities.do_lattice(self.config,
-                                   self.config.substitution_list[0],
-                                   setting["subs_overrides"])
         self.beam_setting(setting)
+        self.config.substitution_list[0].update({"__n_particles__":len(self.hit_list)})
+        utilities.do_lattice(self.config,
+                             self.config.substitution_list[0],
+                             setting["subs_overrides"])
         if setting["direction"] == "backwards":
             for hit in self.hit_list:
                 for var in "px", "py", "pz":
                     hit[var] *= -1
                 pid = self.config.tracking["pdg_pid"]
                 mass = xboa.common.pdg_pid_to_mass[abs(pid)]
-                pz = ((mass+setting["beam"]["energy"])**2-mass**2)**0.5
-                hit["pz"] += 4*pz
-                # P:  ( 0.0000000000000000e+00 , 0.0000000000000000e+00 , -1.5996515454528140e-01 ) pz=-75.0 "Emitting in Distribution"
-                # 4.00483062205346 0.0 -3.3906842888344755e-10 0.0 2.093503785540597e-07 -0.1599651545452814
-                # P: ( 0.0000000000000000e+00 , 0.0000000000000000e+00 , -9.0688867629434872e-02 ) pz=-10.0 "Emitting" in Distribution
-                # 4.00483062205346 0.0 -3.3906842888344755e-10 0.0 2.093503785540597e-07 -0.09068886762943487  pz=-10.0
+                #pz = ((mass+setting["beam"]["energy"])**2-mass**2)**0.5
+                #hit["pz"] += 4*pz
                 hit["z"] = 0.0
+                print("Backwards pz", hit["pz"])
         elif setting["direction"] != "forwards":
             raise RuntimeError("Direction must be forwards or backwards")
 

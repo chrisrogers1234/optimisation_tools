@@ -4,6 +4,7 @@ import shutil
 import io
 import sys
 import importlib
+import json
 
 import numpy
 import ROOT
@@ -23,6 +24,10 @@ import matplotlib.pyplot
 def setup_large_figure(axes, f_size = 20, l_size = 14):
     axes.set_xlabel(axes.get_xlabel(), fontsize=f_size)
     axes.set_ylabel(axes.get_ylabel(), fontsize=f_size)
+    legend = axes.get_legend()
+    if legend:
+        legend.fontsize = l_size
+        legend.prop.set_size(f_size)
     axes.tick_params(labelsize = l_size)
 
 
@@ -92,13 +97,19 @@ def dict_compare(list_of_dicts, include_missing=True, float_tolerance=1e-9):
             delta_keys.append(key)
     return set(delta_keys)
 
-def do_lattice(config, subs, overrides):
+def do_lattice(config, subs, overrides, hit_list = None):
     subs = copy.deepcopy(subs)
     subs.update(overrides)
+    if hit_list:
+        # WARNING - ignores min_track_number in opal_tracking
+        subs.update({"__n_particles__":len(hit_list)})
     subs = preprocess_subs(subs)
     lattice_in = config.tracking["lattice_file"]
     lattice_out = config.tracking["lattice_file_out"]
     xboa.common.substitute(lattice_in, lattice_out, subs)
+    out_dir = os.path.dirname(lattice_out)
+    with open(os.path.join(out_dir, "subs.json"), "w") as out_file:
+        out_file.write(json.dumps(subs, indent=2))
     return subs
 
 def reference(config, energy, x=0., px=0., y=0., py=0.):
@@ -270,6 +281,25 @@ def setup_gstyle():
         ROOT.gStyle.SetLabelSize(0.05, axis)
         ROOT.gStyle.SetTitleSize(0.06, axis)
         ROOT.gStyle.SetTitleOffset(1.10, axis)
+
+
+def setup_da_figure_single(include_projections):
+    fig = matplotlib.pyplot.figure()
+    y, dy = 0.11, 0.34
+    if include_projections:
+        y, dy = 0.20, 0.30
+    axes = [
+        fig.add_subplot(2, 1, 1,  position=[0.11, 0.56, 0.86, 0.34]),
+        fig.add_subplot(2, 6, 2,  position=[0.11, y, 0.36, dy]),
+        fig.add_subplot(2, 6, 3,  position=[0.61, y, 0.36, dy]),
+    ]
+
+    if include_projections:
+        axes += [
+            fig.add_subplot(2, 7, 4,  position=[0.06, 0.10, 0.38, 0.05]),
+            fig.add_subplot(2, 7, 5,  position=[0.56, 0.10, 0.38, 0.05]),
+        ]
+    return fig, axes
 
 def setup_da_figure_decoupling(include_projections):
     fig = matplotlib.pyplot.figure(figsize=(20, 10))

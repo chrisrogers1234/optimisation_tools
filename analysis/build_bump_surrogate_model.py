@@ -18,8 +18,8 @@ from optimisation_tools.opal_tracking import OpalTracking
 from optimisation_tools.utils import utilities
 from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransferMatrix
 import optimisation_tools.analysis.bump_surrogate_model.minimiser as minimiser
-from PyOpal import polynomial_patch
-from PyOpal import ndgrid
+#from PyOpal import polynomial_patch
+#from PyOpal import ndgrid
 
 class BuildBumpSurrogateModel(object):
     def __init__(self, config):

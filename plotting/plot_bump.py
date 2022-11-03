@@ -25,6 +25,7 @@ class PlotBump(object):
         self.data = []
         self.target_field = ""
         self.score_cutoff = None
+        self.text_str = ""
 
     def setup(self):
         utilities.clear_dir(self.plot_dir)
@@ -38,6 +39,12 @@ class PlotBump(object):
 
     def sort_key(self, filename):
         return float(filename.split("_r0_")[1].split("/")[0])
+
+    def sort_key(self, filename):
+        words = filename.split("=")[1:]
+        words[0] = float(words[0].split("_")[0])
+        words[1] = float(words[1].split("/")[0])
+        return [words[0], words[1]]
 
     def load_files(self):
         index = 0
@@ -145,6 +152,7 @@ class PlotBump(object):
         index = 1
         for i, name in enumerate(field_name_list):
             axes = figure.add_subplot(2, 5, i+1)
+            utilities.setup_large_figure(axes)
             z_lambda = lambda bump: bump["bump_fields"][name]
             scatter = self.plot_2d(var_1, var_2, z_lambda, name, False, False, axes)
             figure.colorbar(scatter, ax=[axes])
@@ -157,6 +165,7 @@ class PlotBump(object):
             for phase_index in range(self.number_of_phases):
                 index += 1
                 axes = figure.add_subplot(len(var_3), self.number_of_phases, index)
+                utilities.setup_large_figure(axes)
                 z_lambda = lambda bump: bump[var_z][phase_index]
                 name = var_z+" for phase "+str(phase_index+1)
                 scatter = self.plot_2d(var_1, var_2, z_lambda, name, True, False, axes)
@@ -168,25 +177,27 @@ class PlotBump(object):
     def plot_event_display(self, z_lambda):
         figure = matplotlib.pyplot.figure(figsize=(20,10))
         axes = [
-            figure.add_subplot(2, 3, 1,  position=[0.06, 0.55, 0.26, 0.35]),
-            figure.add_subplot(2, 6, 7,  position=[0.06, 0.10, 0.10, 0.35]),
-            figure.add_subplot(2, 6, 8,  position=[0.22, 0.10, 0.10, 0.35]),
-            figure.add_subplot(2, 3, 2,  position=[0.38, 0.55, 0.26, 0.35]),
-            figure.add_subplot(2, 6, 9,  position=[0.38, 0.10, 0.10, 0.35]),
-            figure.add_subplot(2, 6, 10, position=[0.54, 0.10, 0.10, 0.35]),
-            figure.add_subplot(2, 3, 3,  position=[0.70, 0.55, 0.26, 0.35]),
-            figure.add_subplot(2, 6, 11, position=[0.70, 0.10, 0.10, 0.35]),
-            figure.add_subplot(2, 6, 12, position=[0.86, 0.10, 0.10, 0.35]),
+            figure.add_subplot(2, 3, 1,  position=[0.1, 0.55, 0.43, 0.35]),
+            figure.add_subplot(2, 6, 7,  position=[0.1, 0.10, 0.16, 0.35]),
+            figure.add_subplot(2, 6, 8,  position=[0.38, 0.10, 0.16, 0.35]),
+            #figure.add_subplot(2, 3, 2,  position=[0.38, 0.55, 0.26, 0.35]),
+            #figure.add_subplot(2, 6, 9,  position=[0.38, 0.10, 0.10, 0.35]),
+            #figure.add_subplot(2, 6, 10, position=[0.54, 0.10, 0.10, 0.35]),
+            figure.add_subplot(2, 3, 3,  position=[0.65, 0.55, 0.43, 0.35]),
+            figure.add_subplot(2, 6, 11, position=[0.65, 0.10, 0.16, 0.35]),
+            figure.add_subplot(2, 6, 12, position=[0.88, 0.10, 0.16, 0.35]),
         ]
         scatter = self.plot_2d(1, 3, z_lambda, "", False, True, axes[0])
         self.plot_2d(1, 2, z_lambda, "", False, True, axes[1])
         self.plot_2d(3, 4, z_lambda, "", False, True, axes[2])
-        self.plot_2d(5, 7, z_lambda, "", False, True, axes[3])
-        self.plot_2d(5, 6, z_lambda, "", False, True, axes[4])
-        self.plot_2d(7, 8, z_lambda, "", False, True, axes[5])
-        self.plot_2d(10, 12, z_lambda, "", False, True, axes[6])
-        self.plot_2d(9, 10, z_lambda, "", False, True, axes[7])
-        self.plot_2d(11, 12, z_lambda, "", False, True, axes[8])
+        #self.plot_2d(5, 7, z_lambda, "", False, True, axes[3])
+        #self.plot_2d(5, 6, z_lambda, "", False, True, axes[4])
+        #self.plot_2d(7, 8, z_lambda, "", False, True, axes[5])
+        self.plot_2d(10, 12, z_lambda, "", False, True, axes[3])
+        self.plot_2d(9, 10, z_lambda, "", False, True, axes[4])
+        self.plot_2d(11, 12, z_lambda, "", False, True, axes[5])
+        self.text(axes[0])
+        self.text(axes[3])
         title = self.target_field.replace("__", "").replace("_", " ")
         title += " [T] at station "+str(self.target_probe)
         figure.suptitle(title)
@@ -196,6 +207,7 @@ class PlotBump(object):
 
 
     def plot_2d(self, foil_var1, foil_var2, z_lambda, plot_title, logbar, labels, axes):
+        utilities.setup_large_figure(axes)
         name = plot_title.replace("__", "")
         name = name.replace("_", " ")
         x_data, y_data, z_data = [], [], []
@@ -276,6 +288,7 @@ class PlotBump(object):
         axis_xrange[1] += (axis_xrange[1]-axis_xrange[0])*0.5
         axes.set_xlim(axis_xrange)
         axes.legend()
+        self.text(axes)
         figure.savefig(self.plot_dir+"/bump_fields_"+str(x_axis)+".png")
 
     def angle_plot(self, bump_1, bump_2, y_var, axes, scale_factor=1.0):
@@ -297,6 +310,7 @@ class PlotBump(object):
         axes.scatter(x_axis, y_axis, s=point_size, label=label)
         axes.set_xlabel("Kick angle [$^\\circ$]")
         axes.set_ylabel(self.var[y_var])
+        self.text(axes)
         bump_1_text = bump_1.replace("__", "").replace("_", "").replace("bump", "").replace("field", "")
         bump_2_text = bump_2.replace("__", "").replace("_", " ").replace("bump", "").replace("field", "")
         axes.set_xlabel("$\\mathrm{atan}\\left(\\frac{B("+bump_1_text+")}{B("+bump_2_text+")}\\right)$ [$^\\circ$]")
@@ -304,6 +318,11 @@ class PlotBump(object):
     def plot_lambda(self, bump):
         if not self.score_cutoff or bump["score"][0] < self.score_cutoff:
             return bump["bump_fields"][self.target_field]
+
+    def text(self, axes):
+        if self.text_str:
+            axes.text(0.9, 1.01, self.text_str, ha='right', transform=axes.transAxes)
+
 
     root_objects = []
     var = {
@@ -315,26 +334,20 @@ class PlotBump(object):
         11:"$\\phi_v$", 12:"$A_{v}$"
     }
 
-def main(file_list):
+def main():
+    by = "0.20"
+    root_dir = "output/2022-07-01_baseline/bump_quest_v3"
+    file_list = glob.glob(root_dir+"/find_bump_r0=-*by="+by+"/find_bump_*_002.out")
+    plot_dir = root_dir+"/plot_bump_by="+by
     DecoupledTransferMatrix.det_tolerance = 1.0
-    output_dir = os.path.split(file_list[0])[0]+"/../"
-    plot_dir = os.path.join(output_dir, "plot_bump/")
 
     plotter = PlotBump(plot_dir)
+    plotter.text_str = root_dir.split("_")[-1]
     plotter.score_cutoff = 1e9
     plotter.number_of_phases = 1
     plotter.flip_vertical = False
     plotter.file_list = file_list
     plotter.co_files = []
-    void = [{
-            "filename":os.path.join(output_dir, "closed_orbits_cache"),
-            "ref_to_bump_station_mapping":{0:1, 1:2, 2:3, 3:4, 4:5, 5:6, 6:7, 7:8, 8:9, 9:10}
-        },]+[
-        {
-            "filename":os.path.join(output_dir, "../find_bump_parameters_10/closed_orbits_cache_foil"),
-            "ref_to_bump_station_mapping":{0:0}
-        },
-    ]
     plotter.setup()
 
     plotter.target_probe = 4
@@ -355,14 +368,14 @@ def main(file_list):
     figure = matplotlib.pyplot.figure(figsize=(20,10))
     #for subplot, var in [(1, 10), (2, 12)]:
     axes = figure.add_subplot(1, 1, 1)
-    plotter.angle_plot("__v_bump_1_field__", "__h_bump_1_field__", 10, axes, 10)
-    plotter.angle_plot("__v_bump_1_field__", "__h_bump_1_field__", 12, axes, 1)
+    #plotter.angle_plot("__v_bump_1_field__", "__h_bump_1_field__", 10, axes, 10)
+    #plotter.angle_plot("__v_bump_1_field__", "__h_bump_1_field__", 12, axes, 1)
     axes.legend()
     figure.savefig(os.path.join(plot_dir, "kick_angle_to_field_angle.png"))
     print("Used plot_dir", plot_dir)
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
     matplotlib.pyplot.show(block=False)
     input("Done - Press <CR> to end")
 

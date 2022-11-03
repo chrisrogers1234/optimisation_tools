@@ -12,20 +12,21 @@ import shutil
 
 
 import matplotlib
-import ROOT
 
 import xboa.common
 
-import PyOpal.parser
-import PyOpal.field
-import utils.utilities
-import plotting.plot as plot
+import pyopal.objects.parser
+import pyopal.objects.field
+import optimisation_tools.plotting.plot as plot
+import optimisation_tools.utils.utilities as utilities
+from optimisation_tools.utils import decoupled_transfer_matrix
 
+decoupled_transfer_matrix.DecoupledTransferMatrix.det_tolerance = 1
 
 class MultiPlot(object):
     def __init__(self, plot_dir, dir_list, ref_dir = None):
         self.plot_dir = plot_dir
-        self.base_dir_list = sorted(dir_list, key=self.parse_file_name)
+        self.base_dir_list = sorted(dir_list)
         if ref_dir != None:
             self.base_dir_list.insert(0, ref_dir)
         self.allowed_events = ["ID1"]
@@ -41,7 +42,6 @@ class MultiPlot(object):
         self.max_r_deviation_list = []
         self.max_trans_deviation_list = []
         self.target_r_list = []
-        self.da_n_hits_list = []
         self.max_au_list = []
         self.max_av_list = []
         self.max_a4d_list = []
@@ -54,14 +54,21 @@ class MultiPlot(object):
         self.a_survival_dict = {"au":[], "av":[], "a4d":[]}
 
         self.no_graphics = False
+        self.trackOrbit_file = "track_beam/forwards/VerticalSectorFFA-trackOrbit.dat"
+        self.lattice_file = "track_beam/forwards/VerticalSectorFFA.tmp"
+        self.da_probe_file = "track_beam/forwards/RINGPROBE01.h5"
+        self.co_dir = None
 
     def load_orbits(self):
         "Routine to plot things over a long tracking cycle"
         self.orbit_list = []
         for base_dir in self.base_dir_list:
-            trackfile = os.path.join(base_dir, "track_beam/forwards/VerticalSectorFFA-trackOrbit.dat")
-            orbit = plot.LoadOrbit(trackfile, self.allowed_events, self.phi_limit)
-            self.orbit_list.append(orbit)
+            trackfile = os.path.join(base_dir, self.trackOrbit_file)
+            try:
+                orbit = plot.LoadOrbit(trackfile, self.allowed_events, self.phi_limit)
+                self.orbit_list.append(orbit)
+            except FileNotFoundError:
+                sys.excepthook(*sys.exc_info())
 
     def transpose_list_of_lists(self, list_of_lists):
         #ref_list = [ref_orbit.orbit[var] for var in ["phi", "r", "z"]]
@@ -105,23 +112,36 @@ class MultiPlot(object):
         print(self.max_trans_deviation_list)
 
     def get_targets(self):
-        self.target_r_list = [self.parse_file_name(orbit.file_name)[0] for orbit in self.orbit_list]
-        self.target_theta_list = [self.parse_file_name(orbit.file_name)[1] for orbit in self.orbit_list]
+        self.energy_list = [orbit.get_kinetic_energy(0) for orbit in self.orbit_list]
+        try:
+            self.target_r_list = [self.parse_file_name(orbit.file_name)[0] for orbit in self.orbit_list]
+            self.target_theta_list = [self.parse_file_name(orbit.file_name)[1] for orbit in self.orbit_list]
+        except:
+            self.target_r_list = [i for i, o in enumerate(self.orbit_list)]
+            self.target_theta_list = [i for i, o in enumerate(self.orbit_list)]
         print("GET TARGETS", self.target_r_list, self.target_theta_list)
         self.r_deviation_list = [orbit.interpolate("phi", "r", [108])[1][0] for orbit in self.orbit_list]
         self.y_deviation_list = [orbit.interpolate("phi", "z", [108])[1][0] for orbit in self.orbit_list]
 
     def get_tunes(self):
         self.co_list = []
+        self.tune_0_list = []
+        self.tune_1_list = []
         for base_dir in self.base_dir_list:
             co_file_name = os.path.join(base_dir, "closed_orbits_cache")
-            self.co_list.append(plot.LoadClosedOrbit(co_file_name))
-        self.tune_0_list = [co.tm.get_phase_advance(0)/math.pi/2. for co in self.co_list]
-        self.tune_1_list = [co.tm.get_phase_advance(1)/math.pi/2. for co in self.co_list]
+            try:
+                co = plot.LoadClosedOrbit(co_file_name, True)
+                self.co_list.append(co)
+                print("PHI", co.tm.m)
+                self.tune_0_list.append(co.tm.get_phase_advance(0)/math.pi/2.)
+                self.tune_1_list.append(co.tm.get_phase_advance(1)/math.pi/2.)
+            except Exception:
+                sys.excepthook(*sys.exc_info())
+                print("Failed with", co_file_name)
         print("Ring tunes", self.tune_0_list, self.tune_1_list)
 
     def get_maxwell(self):
-        lattice_file = os.path.join(self.base_dir_list[0], "track_beam/forwards/VerticalSectorFFA.tmp")
+        lattice_file = os.path.join(self.base_dir_list[0], self.lattice_file)
         ref_field = plot.GetFields(lattice_file)
         self.max_divb_list = []
         self.max_curlb_list = []
@@ -146,10 +166,12 @@ class MultiPlot(object):
         ratio_hist = [0 for i in range(self.n_amp_bins)]
         for x in survivor_data:
             bin_index = int(x/self.amp_bin_width)
-            survivor_hist[bin_index] += 1
+            if bin_index < self.n_amp_bins:
+                survivor_hist[bin_index] += 1
         for x in all_data:
             bin_index = int(x/self.amp_bin_width)
-            all_hist[bin_index] += 1
+            if bin_index < self.n_amp_bins:
+                all_hist[bin_index] += 1
         for i in range(self.n_amp_bins):
             if all_hist[i] > 0:
                 ratio_hist[i] = survivor_hist[i]/all_hist[i]
@@ -171,20 +193,23 @@ class MultiPlot(object):
         target_station = 25
         survival_bin = 0.001
         for base_dir in self.base_dir_list:
-            probe_file = os.path.join(base_dir, "track_beam/forwards/RINGPROBE01.h5")
+            print("BASE", base_dir)
+            probe_file = os.path.join(base_dir, self.da_probe_file)
             h5 = plot.LoadH5(probe_file)
-            co_file_name = os.path.join(base_dir, "closed_orbits_cache")
+            co_file_name = os.path.join(self.co_dir, "closed_orbits_cache")
             co = plot.LoadClosedOrbit(co_file_name)
             h5.set_closed_orbit(co)
             hit_data = [item for item in h5.data if item["station"] == target_station]
             survival_ids = {item["id"] for item in hit_data}
+            print("SURVIVORS", target_station, hit_data)
+            print("STATIONS", [item["station"] for item in h5.data])
             init_data = [item for item in h5.data if item["station"] == 0 and item["id"] in survival_ids]
             inot_data = [item for item in h5.data if item["station"] == 0 and item["id"] not in survival_ids]
 
             self.da_n_hits_list.append(len(hit_data))
-            self.max_au_list.append(max([item["au"] for item in init_data]))
-            self.max_av_list.append(max([item["av"] for item in init_data]))
-            self.max_a4d_list.append(max([item["a4d"] for item in init_data]))
+            self.max_au_list.append(0)#max([item["au"] for item in init_data]))
+            self.max_av_list.append(0)#max([item["av"] for item in init_data]))
+            self.max_a4d_list.append(0)#max([item["a4d"] for item in init_data]))
             if len(inot_data) == 0:
                 self.min_au_list.append(self.max_au_list[-1])
                 self.min_av_list.append(self.max_av_list[-1])
@@ -247,8 +272,8 @@ class MultiPlot(object):
                 (self.min_a4d_list, "Minimum initial A$_4d$ of lost particles [mm]", "min_a4d", [0.0, 0.025]),
                 (self.max_divb_list, "Max Div(B) [T/m]", "divb", [0.0, None]),
                 (self.max_curlb_list, "Max |Curl(B)| [T/m]", "curlb", [0.0, None]),
-                (self.tune_0_list, "$\\nu_u$", "nu_u", [None, 0.0]),
-                (self.tune_1_list, "$\\nu_v$", "nu_v", [0.0, None]),
+                (self.tune_0_list, "$\\nu_u$", "nu_u", [0.0, 1.0]),
+                (self.tune_1_list, "$\\nu_v$", "nu_v", [0.0, 1.0]),
                 (self.max_y_deviation_list, "Max vertical deviation [m]", "max_vert", [0.0, None]),
                 (self.max_r_deviation_list, "Max horizontal deviation [m]", "max_hor", [0.0, None]),
                 (self.max_trans_deviation_list, "Max deviation [m]", "max_total", [0.0, None]),
@@ -260,6 +285,8 @@ class MultiPlot(object):
                 axes.scatter(x_list, y_list)
             except ValueError:
                 print("Failed to plot", x_label, "vs", y_label)
+                print(x_list)
+                print(y_list)
                 matplotlib.pyplot.close(figure)
                 continue
             axes.set_xlabel(x_label)
@@ -318,28 +345,26 @@ class MultiPlot(object):
 
     def parse_orbits(self):
         self.get_targets()
-        #self.get_max_deviations()
+        self.get_max_deviations()
         self.get_tunes()
         #self.get_maxwell()
-        #self.get_da()
+        self.get_da()
 
 def main():
     do_theta = False
-    plot_dir = "output/double_triplet_baseline/single_turn_injection/bump_scan/"
-    ref_dir = os.path.join(plot_dir, "track_bump_r_0_theta_0_test3")
-    if do_theta:
-        dir_list = glob.glob(os.path.join(plot_dir, "track_bump_r_10_theta_*"))
-        plot_dir = plot_dir+"/plot_angle_scan/"
-    else:
-        dir_list = glob.glob(os.path.join(plot_dir, "track_bump_r_*_theta_0"))
-        plot_dir = plot_dir+"/plot_position_scan/"
+    plot_dir = "output/2022-07-01_baseline/bump_quest_v10/"
+    ref_dir = os.path.join(plot_dir, "track_bump_r0=-000_by=0.00_k=8.0095")
+    dir_list = glob.glob(os.path.join(plot_dir, "track_bump_r0=-*0_by=0.10_k=8.0095"))
     plot = MultiPlot(plot_dir, dir_list, ref_dir)
+    plot.co_dir = os.path.join(plot_dir, "find_bump_r0=-000_by=0.00_k=8.0095")
+    plot.trackOrbit_file = "track_beam/da/FETS_Ring-trackOrbit.dat"
+    plot.lattice_file = "track_beam/da/FETS_Ring.tmp"
+    plot.da_probe_file = "track_beam/da/RINGPROBE01.h5"
     plot.load_orbits()
     plot.parse_orbits()
-    if do_theta:
-        x_list = plot.target_theta_list
-    else:
-        x_list = plot.target_r_list
+    plot_dir = plot_dir+"/plot_test/"
+    utilities.clear_dir(plot_dir)
+    x_list = plot.target_r_list
     plot.plot_1d(x_list)
     plot.plot_2d(x_list)
 

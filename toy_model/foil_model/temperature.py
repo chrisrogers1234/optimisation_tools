@@ -1,3 +1,6 @@
+import os
+import shutil
+
 import numpy
 import scipy
 import scipy.integrate
@@ -179,7 +182,10 @@ def plot_foil_temperature(output_dir, solution):
         matplotlib.pyplot.close(figure)
 
 def main():
-    output_dir = "output/foil_heating_test_sns"
+    output_dir = "output/foil_heating_test_fets_ring"
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.makedirs(output_dir)
     heating = FoilHeatingModel()
     heating.setup(config_fets_ring())
     for i in range(10):

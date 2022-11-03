@@ -11,8 +11,8 @@ import ROOT
 import xboa.common
 import xboa.hit
 
-import PyOpal.parser
-import PyOpal.field
+#import PyOpal.parser
+#import PyOpal.field
 
 class PyOpalTracking(object):
     def __init__(self, config, run_dir):
