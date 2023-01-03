@@ -87,8 +87,11 @@ class PlotG4BL(object):
     def get_label(self, data):
         label = ""
         for var, value in data["variables"].items():
-            if self.key_subs[var] != None:
-                label += self.key_subs[var]+": "+str(value)+" "+self.units_subs[var]
+            try:
+                if self.key_subs[var] != None:
+                    label += self.key_subs[var]+": "+str(value)+" "+self.units_subs[var]
+            except KeyError:
+                pass
         return label
 
     def do_plots(self):
@@ -309,12 +312,12 @@ class PlotG4BL(object):
 
             tesla = xboa.common.units["T"]
             b_list = {
-                "bx":[hit["bx"]*100/tesla for hit in ref_list if hit["z"] <= z_max],
-                "by":[hit["by"]*100/tesla for hit in ref_list if hit["z"] <= z_max],
+                "bx":[hit["bx"]*10/tesla for hit in ref_list if hit["z"] <= z_max],
+                "by":[hit["by"]*10/tesla for hit in ref_list if hit["z"] <= z_max],
                 "bz":[hit["bz"]/tesla for hit in ref_list if hit["z"] <= z_max],
             }
             if i == 0:
-                for var, linestyle, y_label in [("bx", "dashed", "B$_{x}$ [0.01 T]"), ("by", "dotted", "B$_{y}$ [0.01 T]"), ("bz", "solid", "B$_{z}$ [T]")]:
+                for var, linestyle, y_label in [("bx", "dashed", "B$_{x}$ [0.1 T]"), ("by", "dotted", "B$_{y}$ [0.1 T]"), ("bz", "solid", "B$_{z}$ [T]")]:
                     axes2.plot(z_list, b_list[var], label=y_label, linestyle=linestyle, c="black")
             for var, linestyle in [("bx", "dashed"), ("by", "dotted"), ("bz", "solid")]:
                 if var == "bz":
@@ -332,7 +335,7 @@ class PlotG4BL(object):
         axes1.legend(loc="upper right")
 
         axes2.set_xlabel("z [mm]", fontsize=self.f_size)
-        axes2.set_ylabel("Magnetic Field [T]", fontsize=self.f_size)
+        axes2.set_ylabel("Magnetic Field", fontsize=self.f_size)
         axes2.tick_params(labelsize = self.l_size)
         axes2.legend(loc="upper right")
 
@@ -469,9 +472,10 @@ class PlotG4BL(object):
     f_size = 20
 
 def main():
-    run_dir = "output/rectilinear_cooling_v24/"
-    run_dir_glob = [run_dir+"/by=0.2_pz=190_optics", run_dir+"/by=0.2_pz=200_optics", run_dir+"/by=0.2_pz=210_optics",]
-    plot_dir = run_dir+"/scan_plots_momentum_reduced/"
+    run_dir = "output/musr_cooling_v4/"
+    dp_str = "ppmm"
+    run_dir_glob = [run_dir+"/pz=*_dp="+dp_str+"_*orbit",]
+    plot_dir = run_dir+"/"+dp_str+"_plots/"
 
     #run_dir_glob = [run_dir+"by=0.05_pz=?00/", run_dir+"by=0.05_pz=60/"]
     #plot_dir = run_dir+"/scan_plots_momentum_restricted/"

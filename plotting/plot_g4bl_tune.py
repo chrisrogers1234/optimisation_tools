@@ -20,13 +20,12 @@ from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransfer
 DecoupledTransferMatrix.det_tolerance = 1
 
 class PlotG4BL(object):
-    def __init__(self, run_dir_glob, co_file, cell_length, reference_file, reference_file_format, plot_dir, max_score):
+    def __init__(self, run_dir_glob, co_file, reference_file, reference_file_format, plot_dir, max_score):
         self.plot_dir = plot_dir
         self.co_data = []
-        self.cell_length = cell_length
         self.min_n_cells = 90
-        self.target_p = 200
-        self.max_p = 240
+        self.target_p = 20
+        self.max_p = 21
         utilities.clear_dir(plot_dir)
         self.load_data(run_dir_glob, co_file, reference_file, reference_file_format)
         self.color_lambda = lambda data: data["bunch_list"][0][0]["p"]
@@ -67,15 +66,26 @@ class PlotG4BL(object):
         self.figure2 = matplotlib.pyplot.figure()
         self.figure3 = matplotlib.pyplot.figure()
         self.figure4 = matplotlib.pyplot.figure()
+        self.figure5 = matplotlib.pyplot.figure()
         self.process_data()
         p_list = [abs(data["p_list"][0]-self.target_p) for data in self.co_data]
         closest = p_list.index(min(p_list))
         self.plot_reference_z()
         self.plot_fft(self.co_data[closest])
-        self.plot_fit_scan(180, 230)
+        self.plot_fit_scan(18, 23)
+        self.plot_survival()
         self.figure2.savefig(self.plot_dir+"/fft_max.png")
         self.figure3.savefig(self.plot_dir+"/n_turns.png")
         self.figure4.savefig(self.plot_dir+"/fit_params.png")
+        self.figure5.savefig(self.plot_dir+"/survival.png")
+
+    def get_ellipse(self, bunch):
+        points = [(hit["x"], hit["px"]) for hit in bunch]
+        mean, cov = xboa.common.fit_ellipse(points, 1e10)
+        print("Fitted")
+        print(mean)
+        print(cov)
+        return cov
 
     def process_data(self):
         for i, data in enumerate(self.co_data):
@@ -92,13 +102,18 @@ class PlotG4BL(object):
             data["n_list"] = []
             data["p_list"] = []
             data["octupole_list"] = []
+            data["max_cell"] = []
+            data["amp0"] = []
+            dz = bunch_list[0][2]["z"] - bunch_list[0][0]["z"]
+            data["var"] = self.get_ellipse(bunch_list[4]).tolist()
             for bunch in bunch_list[:]:
                 x0 = bunch[0]["x"]
-                fft_input_data = [hit["x"] for hit in bunch]
+                fft_input_data = [hit["x"] for hit in bunch[::2]]
                 fft_output_data = scipy.fft.fft(fft_input_data)[1:]
                 if len(fft_output_data) == 0:
                     continue
 
+                data["max_cell"].append(max([hit["z"] for hit in bunch])/dz)
                 data["fft_detail_nu_list"].append([ffti/len(fft_output_data) for ffti in range(len(fft_output_data))])
                 data["fft_detail_re_list"].append([numpy.real(x) for x in fft_output_data])
                 data["fft_detail_im_list"].append([numpy.imag(x) for x in fft_output_data])
@@ -112,6 +127,7 @@ class PlotG4BL(object):
                 fft_max_i = data["fft_detail_re_list"][-1].index(max(data["fft_detail_re_list"][-1]))
                 data["fft_list"].append(0.5-fft_max_i/len(fft_output_data))
                 data["fft_angle_list"].append(data["fft_detail_angle_list"][-1][fft_max_i])
+                data["amp0"].append(xboa.bunch.Bunch.get_amplitude(bunch, bunch[0], ["x"], data["var"], {"x":0., "px":0.}))
 
     def plot_fft(self, data):
         matplotlib.pyplot.close(self.figure1)
@@ -121,7 +137,7 @@ class PlotG4BL(object):
         #axes3 = self.figure1.add_subplot(2, 2, 3)
         p0 = round(data["p_list"][0], 1)
         x0_list = [data["x_init_list"][j] for j, nu_list in 
-                        enumerate(data["fft_detail_nu_list"]) if len(nu_list) >  self.min_n_cells]
+                        enumerate(data["fft_detail_nu_list"]) if data["max_cell"][j] >  self.min_n_cells]
 
         colors = matplotlib.pyplot.cm.coolwarm
         norm = matplotlib.colors.Normalize(min(x0_list), max(x0_list))
@@ -165,16 +181,16 @@ class PlotG4BL(object):
     def plot_reference_z(self):
         axes2 = self.figure2.add_subplot(1, 1, 1)
         axes3 = self.figure3.add_subplot(1, 1, 1)
-        all_p_list = [self.color_lambda(data) for data in self.co_data]
+        color_list = [self.color_lambda(data) for data in self.co_data]
         colors = matplotlib.pyplot.cm.coolwarm
-        norm = matplotlib.colors.Normalize(min(all_p_list), max(all_p_list))
+        norm = matplotlib.colors.Normalize(min(color_list), max(color_list))
         mappable = matplotlib.cm.ScalarMappable(norm, colors)
         for i, data in enumerate(self.co_data):
             label = self.get_label(data)
             #p_norm = (data["p_list"][0]-min(all_p_list))/(max(all_p_list) - min(all_p_list))
             rgba = mappable.to_rgba(self.color_lambda(data))
             fft_list, fft_angle_list, x_init_list = [], [], []
-            for j, n in enumerate(data["n_list"]):
+            for j, n in enumerate(data["max_cell"]):
                 x0 = data["x_init_list"][j]
                 if n > self.min_n_cells and x0 > 1e-9:
                     fft_list.append(data["fft_list"][j])
@@ -184,7 +200,7 @@ class PlotG4BL(object):
             aopt, acov = self.fit(x_init_list, fft_list)
             fit_data = [self.get_y(x, aopt[0], aopt[1]) for x in x_init_list]
             axes2.plot(fit_data, x_init_list, c=rgba, linestyle='--')
-            axes3.scatter(data["n_list"], data["x_init_list"])
+            axes3.scatter(data["max_cell"], data["x_init_list"])
             data["fit_params"] = aopt
             data["fit_cov"] = acov
         self.figure2.colorbar(mappable=mappable, ax=axes2) 
@@ -192,9 +208,28 @@ class PlotG4BL(object):
         for i in range(2, 8):
             axes2.plot([1/i, 1/i], ylim, c='lightgray', linestyle='--')
         axes2.set_ylim(ylim)
-        axes2.set_xlim(0.0, 0.5)
+        axes2.set_xlim(0.0, 1.0)
         axes2.set_xlabel("$\\nu$")
         axes2.set_ylabel("x$_0$ [mm]")
+
+    def plot_survival(self):
+        #axes2 = self.figure5.add_subplot(1, 2, 2)
+        axes1 = self.figure5.add_subplot(1, 1, 1)
+        x_list = [self.color_lambda(data) for data in self.co_data]
+        y_list_1, y_list_2 = [], []
+        for data in self.co_data:
+            survivors_1 = [x_init for j, x_init in enumerate(data["x_init_list"]) if data["max_cell"][j] > self.min_n_cells]
+            y_list_1.append(max(survivors_1))
+            survivors_2 = [amp for j, amp in enumerate(data["amp0"]) if data["max_cell"][j] > self.min_n_cells]
+            y_list_2.append(max(survivors_2))
+        axes1.scatter(x_list, y_list_1)
+        axes1.set_ylabel("Maximum surviving x$_0$ [mm]")
+        axes1.set_xlim(0, axes1.get_xlim()[1])
+        axes1.set_ylim(0, axes1.get_ylim()[1])
+        #axes2.scatter(x_list, y_list_2)
+        #axes2.set_ylabel("Maximum surviving Amplitude [mm]")
+        #axes2.set_xlim(0, axes2.get_xlim()[1])
+        #axes2.set_ylim(0, axes2.get_ylim()[1])
 
     def plot_fit_scan(self, pmin, pmax):
         axes = self.figure4.add_subplot(1, 1, 1)
@@ -226,20 +261,21 @@ class PlotG4BL(object):
     beta_limit = 1e4
 
 def main():
-    run_dir = "output/rectilinear_cooling_v6/"
-    run_dir_glob = [run_dir+"oct=*_pz=*/"]#, run_dir+"by=0.2_pz=200_r0=*/", run_dir+"by=0.2_pz=220_r0=*/"]
-    plot_dir = run_dir+"/plot_momentum/"
+    run_dir = "output/musr_cooling_v1/"
+    run_dir_glob = sorted(reversed([run_dir+"scale=*_pz=*/"]))#, run_dir+"by=0.2_pz=200_r0=*/", run_dir+"by=0.2_pz=220_r0=*/"]
+    plot_dir = run_dir+"/plot_momentum_2/"
 
     #run_dir_glob = [run_dir+"by=0.05_pz=?00/", run_dir+"by=0.05_pz=60/"]
     #plot_dir = run_dir+"/scan_plots_momentum_restricted/"
     file_name = "track_beam_amplitude/da_scan/output*.txt"
     co_file_name = "closed_orbits_cache"
-    cell_length = 2000.0 # full cell length
     file_format = "icool_for009"
-    plotter = PlotG4BL(run_dir_glob, co_file_name, cell_length, file_name, file_format, plot_dir, 1e9)
+    plotter = PlotG4BL(run_dir_glob, co_file_name, file_name, file_format, plot_dir, 1e9)
     plotter.beta_limit = 1e4
+    plotter.max_p = 171
     plotter.color_lambda = lambda data: data["subs"]["__octupole_coefficient__"]
     plotter.color_lambda = lambda data: data["subs"]["__momentum__"]
+    plotter.color_lambda = lambda data: data["subs"]["__cell_length__"]
     plotter.do_plots()
 
 

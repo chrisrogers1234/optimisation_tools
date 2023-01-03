@@ -1,3 +1,4 @@
+import subprocess
 import copy
 import os
 import shutil
@@ -106,8 +107,15 @@ def do_lattice(config, subs, overrides, hit_list = None):
     subs = preprocess_subs(subs)
     lattice_in = config.tracking["lattice_file"]
     lattice_out = config.tracking["lattice_file_out"]
-    xboa.common.substitute(lattice_in, lattice_out, subs)
-    out_dir = os.path.dirname(lattice_out)
+    if type(lattice_in) == type(""):
+        lattice_in = [lattice_in] 
+    if type(lattice_out) == type(""):
+        lattice_out = [lattice_out] 
+    if len(lattice_out) != len(lattice_in):
+        raise ValueError(f"lattice in length did not match lattice out length {lattice_in}, {lattice_out}")
+    for lin, lout in zip(lattice_in, lattice_out):
+        xboa.common.substitute(lin, lout, subs)
+    out_dir = os.path.dirname(lattice_out[0])
     with open(os.path.join(out_dir, "subs.json"), "w") as out_file:
         out_file.write(json.dumps(subs, indent=2))
     return subs
@@ -382,3 +390,21 @@ def get_config(path_code="scripts/"):
     config_mod = importlib.import_module(config_module)
     config = config_mod.Config(*config_args)
     return sys.argv[1], config
+
+def mencode(working_directory, fin_str, fout_name):
+    here = os.getcwd()
+    os.chdir(working_directory)
+    print("Making movie in", os.getcwd())
+    try:
+        output = subprocess.check_output(["mencoder",
+                                "mf://"+fin_str,
+                                "-mf", "w=800:h=600:fps=5:type=png",
+                                "-ovc", "lavc",
+                                "-lavcopts", "vcodec=msmpeg4:vbitrate=2000:mbd=2:trell",
+                                "-oac", "copy",
+                                "-o", fout_name])
+    except:
+        sys.excepthook(*sys.exc_info())
+        print("Movie failed")
+    finally:
+        os.chdir(here)

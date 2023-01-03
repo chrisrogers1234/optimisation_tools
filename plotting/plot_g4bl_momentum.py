@@ -37,11 +37,12 @@ class PlotG4BL(object):
         else:
             globble = glob.glob(run_dir_glob)
         for a_dir in sorted(globble):
+            print(globble)
             new_co_data = []
-            reference_data_glob = sorted(glob.glob(os.path.join(a_dir, reference_file)))
+            reference_data_glob = sorted(glob.glob(os.path.join(a_dir, reference_file))) # output.txt
             for i, file_name in enumerate(reference_data_glob):
                 new_co_data.append({"bunch_list":Bunch.new_list_from_read_builtin(reference_file_format, file_name)})
-            co_file_name = os.path.join(a_dir, co_file)
+            co_file_name = os.path.join(a_dir, co_file) # closed_orbits_cache
             try:
                 fin = open(co_file_name)
                 co_data = json.loads(open(co_file_name).read())
@@ -72,8 +73,11 @@ class PlotG4BL(object):
     def get_label(self, data):
         label = ""
         for var, value in data["variables"].items():
-            if self.key_subs[var] != None:
-                label += self.key_subs[var]+": "+str(value)+" "+self.units_subs[var]
+            try:
+                if self.key_subs[var] != None:
+                    label += self.key_subs[var]+": "+str(value)+" "+self.units_subs[var]
+            except KeyError:
+                pass
         return label
 
     def parse_substitutions(self):
@@ -90,29 +94,35 @@ class PlotG4BL(object):
 
     def do_plots(self):
         self.figure1 = matplotlib.pyplot.figure()
+        self.figure2 = matplotlib.pyplot.figure()
         self.plot_reference_z()
-        self.figure1.savefig(self.plot_dir+"/reference_z.png")
+        self.figure1.savefig(self.plot_dir+"/z_vs_p.png")
+        self.figure2.savefig(self.plot_dir+"/z_vs_xy.png")
         print("Plotted data with variables", self.key_list)
         max_keys = max([(len(data.keys()), data.keys()) for data in self.co_data])
         print("Top level data keys were", max_keys[1])
 
     def plot_reference_z(self):
         axes1 = self.figure1.add_subplot(1, 1, 1)
+        axes2 = self.figure2.add_subplot(1, 1, 1)
         for i, data in enumerate(self.co_data):
             bunch_list = data["bunch_list"]
             ref_list = []
             for bunch in bunch_list:
-                ref_list += bunch.get_hits("event_number", 0)
+                ref_list += bunch.get_hits("event_number", 1)
             print("Found", len(ref_list), "reference hits")
 
             c = self.colors[i]
             print([hit["p"] for hit in ref_list])
             label = self.get_label(data)
             axes1.plot([hit["z"] for hit in ref_list], [hit["p"] for hit in ref_list], linestyle='dotted', c=c, label=label)
+            axes2.plot([hit["z"] for hit in ref_list], [hit["x"] for hit in ref_list], linestyle='dotted', c=c, label=label)
+            axes2.plot([hit["z"] for hit in ref_list], [hit["y"] for hit in ref_list], linestyle='dashed', c=c, label=label)
 
         axes1.set_xlabel("z [mm]")
         axes1.set_ylabel("P [MeV/c]")
         axes1.legend(loc="upper right")
+        axes2.legend(loc="upper right")
 
 
     key_subs = {
@@ -130,15 +140,15 @@ class PlotG4BL(object):
     beta_limit = 1e4
 
 def main():
-    run_dir = "output/rectilinear_cooling_v13/"
-    run_dir_glob = [run_dir+"by=0.2_pz=*_r0=*/"]#, run_dir+"by=0.2_pz=200_r0=*/", run_dir+"by=0.2_pz=220_r0=*/"]
+    run_dir = "output/musr_cooling_v4/"
+    run_dir_glob = [run_dir+"*pz=10_*orbit/"]#, run_dir+"by=0.2_pz=200_r0=*/", run_dir+"by=0.2_pz=220_r0=*/"]
     plot_dir = run_dir+"/plot_momentum/"
 
     #run_dir_glob = [run_dir+"by=0.05_pz=?00/", run_dir+"by=0.05_pz=60/"]
     #plot_dir = run_dir+"/scan_plots_momentum_restricted/"
     file_name = "tmp/find_closed_orbits/output*.txt"
     co_file_name = "closed_orbits_cache"
-    cell_length = 2000.0 # full cell length
+    cell_length = 100.0 # full cell length
     file_format = "icool_for009"
     plotter = PlotG4BL(run_dir_glob, co_file_name, cell_length, file_name, file_format, plot_dir, 1e9)
     plotter.beta_limit = 1e4

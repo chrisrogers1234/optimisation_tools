@@ -46,12 +46,33 @@ class MonitorModel(object):
 
     def plot_data(self):
         figure = matplotlib.pyplot.figure()
+        print("monitor and filtered")
         axes = figure.add_subplot()
         time_constant = self.t_array[1]-self.t_array[0]
         axes.bar(self.t_array, self.v_array, width=time_constant)
         axes.bar(self.t_array, self.v_output, width=time_constant)
         axes.set_xlabel("Time [ns]")
         axes.set_ylabel("Voltage [AU]")
+        figure.savefig(self.output_directory+"/monitor_and_filtered.png")
+        t_min, t_max = 0, 2e4
+        i = 0
+        while True and t_min < self.t_array[-1]:
+            print("Subplot", i)
+            axes.set_xlim(t_min, t_max)
+            suffix = str(i).rjust(4, "0")
+            t_min += 5e3
+            t_max += 5e3
+            i += 1
+            figure.savefig(self.output_directory+"/monitor_and_filtered_"+suffix+".png")
+        print("filtered")
+        figure = matplotlib.pyplot.figure()
+        axes = figure.add_subplot()
+        time_constant = self.t_array[1]-self.t_array[0]
+        axes.bar(self.t_array, self.v_output, width=time_constant)
+        axes.set_xlabel("Time [ns]")
+        axes.set_ylabel("Voltage [AU]")
+        figure.savefig(self.output_directory+"/filtered.png")
+        return
         figure = matplotlib.pyplot.figure()
         axes = figure.add_subplot()
         f_array = [i*self.frequency_bin for i in range(len(self.v_fft)-1)]
@@ -62,12 +83,16 @@ class MonitorModel(object):
 
 
 def main():
-    output_directory = "output/hold_ramp_hold_100_100_100/"
+    output_directory = "output/hold_ramp_hold_stats_500_50_500/"
     model = MonitorModel()
     model.output_directory = output_directory
+    print("Loading")
     model.load_data(output_directory+"/monitor.dat")
+    print("Filtering")
     model.filter_data()
+    print("Plotting")
     model.plot_data()
+    print("Writing")
     model.write_data()
 
 if __name__ == "__main__":

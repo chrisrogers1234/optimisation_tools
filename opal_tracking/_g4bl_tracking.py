@@ -63,6 +63,8 @@ class G4BLTracking(TrackingBase):
         self.beam_filename = beam_filename
         self.beam_format = "g4beamline_bl_track_file"
         self.lattice_filename = lattice_filename
+        if type(self.lattice_filename) == type([]):
+            self.lattice_filename = self.lattice_filename[0]
         self.output_filename_list = output_filename
         self.output_format = "icool_for009"
         if type(self.output_filename_list) == type(""):

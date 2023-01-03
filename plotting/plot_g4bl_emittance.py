@@ -28,8 +28,8 @@ class PlotG4BL(object):
         self.variables_of_interest = None
         self.px_range = [-80.0, 80.0]
         self.x_range = [-100.0, 100.0]
-        self.pz_range = [150.0, 250.0]
-        self.e_range = [150.0, 325.0]
+        self.pz_range = [1.0, 250.0]
+        self.e_range = [0.0, 5.0]
         self.ct_range = [-300.0, 300.0]
         self.z_range = [None, None]
         self.file_format = file_format
@@ -73,6 +73,7 @@ class PlotG4BL(object):
             if self.analysis_list and i not in self.analysis_list:
                 continue
             data["bunch_list"] = Bunch.new_list_from_read_builtin(self.file_format, data["file_name"])
+            print([len(bunch) for bunch in data["bunch_list"]])
             print("Plots for file", i+1)
             self.plot_dir = data["plot_dir"]
             self.movie_dir = data["plot_dir"]+"/movie"
@@ -231,9 +232,9 @@ class PlotG4BL(object):
         print()
         for i, bunch in enumerate(data["bunch_list"][:self.max_station]):
             print("\r    Making movie frames", i, "/", len(data["bunch_list"]), end="")
-            my_vars = bunch.list_get_hit_variable(["x", "px", "y", "py", "ct", "energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "mm", "MeV", ""])
+            my_vars = bunch.list_get_hit_variable(["x", "px", "y", "py", "ct", "kinetic_energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "mm", "MeV", ""])
             bunch.conditional_remove({"weight":0.00001}, operator.lt)
-            my_vars_cut = bunch.list_get_hit_variable(["x", "px", "y", "py", "ct", "energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "mm", "MeV", ""])
+            my_vars_cut = bunch.list_get_hit_variable(["x", "px", "y", "py", "ct", "kinetic_energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "mm", "MeV", ""])
 
             figure = matplotlib.pyplot.figure(figsize=(20,10))
             figure.suptitle(data["plot_name"]+"\nz: "+str(bunch[0]['z']/xboa.common.units["m"])+" m; N: "+str(len(bunch)))
@@ -264,7 +265,7 @@ class PlotG4BL(object):
             axes.scatter(my_vars[0], my_vars[5], c="orange")
             axes.scatter(my_vars_cut[0], my_vars_cut[5])
             axes.set_xlabel("x [mm]")
-            axes.set_ylabel("Total energy [MeV]")
+            axes.set_ylabel("Kinetic energy [MeV]")
             axes.set_xlim(self.x_range)
             axes.set_ylim(self.e_range)
 
@@ -272,7 +273,7 @@ class PlotG4BL(object):
             axes.scatter(my_vars[2], my_vars[5], c="orange")
             axes.scatter(my_vars_cut[2], my_vars_cut[5])
             axes.set_xlabel("y [mm]")
-            axes.set_ylabel("Total energy [MeV]")
+            axes.set_ylabel("Kinetic energy [MeV]")
             axes.set_xlim(self.x_range)
             axes.set_ylim(self.e_range)
 
@@ -349,18 +350,18 @@ class PlotG4BL(object):
     el_limit = 25
 
 def main():
-    run_dir = "output/rectilinear_cooling_v26/"
+    run_dir = "output/musr_cooling_v3/"
     plot_dir = "emittance_plots/"
-    run_dir_glob = run_dir+"*0.2*_3*/"
-    file_name = "track_beam_amplitude/cooling_test/output.txt"
+    run_dir_glob = run_dir+"pz=10_dp=pppp_cooling_no_dipole_test/"
+    file_name = "track_beam_amplitude/equilibrium_test/output.txt"
     cell_length = 2000.0 # full cell length
     file_format = "icool_for009"
     plotter = PlotG4BL(run_dir_glob, file_name, file_format, plot_dir)
     plotter.analysis_list = None
-    plotter.e_min = 200.0
+    plotter.e_min = 0.0
     plotter.e_max = 270.0
-    plotter.z_range = [55000, 105100]
-    plotter.max_station = 2
+    plotter.z_range = [0, 105100]
+    plotter.max_station = 100
     plotter.variables_of_interest = ["__dipole_field__", "__momentum__", "__wedge_opening_angle__"]
     plotter.do_plots()
 
