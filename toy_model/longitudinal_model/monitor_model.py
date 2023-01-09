@@ -1,3 +1,4 @@
+import os
 import copy
 import numpy.fft
 import matplotlib.pyplot
@@ -28,7 +29,7 @@ class MonitorModel(object):
         self.t_array = numpy.array(self.t_array)
         self.v_array = numpy.array(self.v_array)
         self.frequency_bin = 1/(self.t_array[-1]-self.t_array[0])
-        print(f"Loaded {line_number} lines")
+        print(f"  Loaded {line_number} lines")
 
     def filter_data(self):
         self.v_fft = numpy.fft.fft(self.v_array)
@@ -38,33 +39,33 @@ class MonitorModel(object):
         if self.low_frequency_cutoff:
             low_frequency_index = int(self.low_frequency_cutoff/self.frequency_bin)
             v_fft_cut[:low_frequency_index] = numpy.zeros((low_frequency_index,))
-            print(f"Low frequency cut at index {low_frequency_index} for voltage data from {self.t_array[0]} to {self.t_array[-1]} ns")
+            print(f"  Low frequency cut at index {low_frequency_index} for voltage data from {self.t_array[0]} to {self.t_array[-1]} ns")
         self.v_output = numpy.fft.ifft(v_fft_cut)
 
     def write_data(self):
-        pass
+        fout = open(os.path.join(self.output_directory, "filtered.dat"), "w")
+        for i, t in enumerate(self.t_array):
+            v = self.v_output[i]
+            fout.write(str(t)+" "+str(numpy.real(v))+"\n")
 
     def plot_data(self):
         figure = matplotlib.pyplot.figure()
-        print("monitor and filtered")
         axes = figure.add_subplot()
         time_constant = self.t_array[1]-self.t_array[0]
-        axes.bar(self.t_array, self.v_array, width=time_constant)
+        axes.bar(self.t_array, self.v_array, width=time_constant, align="edge")
         axes.bar(self.t_array, self.v_output, width=time_constant)
         axes.set_xlabel("Time [ns]")
         axes.set_ylabel("Voltage [AU]")
         figure.savefig(self.output_directory+"/monitor_and_filtered.png")
         t_min, t_max = 0, 2e4
         i = 0
-        while True and t_min < self.t_array[-1]:
-            print("Subplot", i)
+        while False and t_min < self.t_array[-1]:
             axes.set_xlim(t_min, t_max)
             suffix = str(i).rjust(4, "0")
             t_min += 5e3
             t_max += 5e3
             i += 1
             figure.savefig(self.output_directory+"/monitor_and_filtered_"+suffix+".png")
-        print("filtered")
         figure = matplotlib.pyplot.figure()
         axes = figure.add_subplot()
         time_constant = self.t_array[1]-self.t_array[0]
@@ -72,28 +73,41 @@ class MonitorModel(object):
         axes.set_xlabel("Time [ns]")
         axes.set_ylabel("Voltage [AU]")
         figure.savefig(self.output_directory+"/filtered.png")
-        return
-        figure = matplotlib.pyplot.figure()
-        axes = figure.add_subplot()
-        f_array = [i*self.frequency_bin for i in range(len(self.v_fft)-1)]
-        axes.bar(f_array, self.v_fft[1:], width=self.frequency_bin)
-        axes.set_xlabel("Frequency [GHz]")
-        axes.set_ylabel("FFT(V) [AU]")
-        figure.savefig(self.output_directory+"/fft_voltage.png")
 
 
-def main():
-    output_directory = "output/hold_ramp_hold_stats_500_50_500/"
+def main_dir(output_directory):
+    print("Doing", output_directory)
     model = MonitorModel()
     model.output_directory = output_directory
-    print("Loading")
+    print("  Loading")
     model.load_data(output_directory+"/monitor.dat")
-    print("Filtering")
+    print("  Filtering")
     model.filter_data()
-    print("Plotting")
+    print("  Plotting")
     model.plot_data()
-    print("Writing")
+    print("  Writing")
     model.write_data()
+
+def main():
+    output_directory_list = [
+        f"output/kurns_v4/constant_bucket_beam_energy_scan_{i}/" for i in range(-10, 11, 2)
+    ]
+    print("Loading following dirs")
+    for output_directory in output_directory_list:
+        print("   ", output_directory)
+    for output_directory in output_directory_list:
+        a_pid = os.fork()
+        if a_pid == 0: # the child process
+            main_dir(output_directory)
+            # hard exit returning 0 - don't want to end up in any exit handling
+            # stuff, just die ungracefully now the simulation has run
+            os._exit(0)
+        else:
+            retvalue = os.waitpid(a_pid, 0)[1]
+        if retvalue != 0:
+            # it means we never reached os._exit(0)
+            raise RuntimeError("Opal failed returning "+str(retvalue))
+        print("PARENT - next")
 
 if __name__ == "__main__":
     main()

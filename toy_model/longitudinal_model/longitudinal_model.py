@@ -1,3 +1,4 @@
+import json
 import os
 import copy
 import math
@@ -155,18 +156,17 @@ class BeamMonitor(object):
     def do_plot(self, t_resolution, output_directory, model):
         dt = 50000
         t0, t1 = min(self.t_list), max(self.t_list)
-        n_bins = int((t1-t0)/t_resolution)+1
-
+        t_bins = [i*t_resolution for i in range(int(t1/t_resolution)+1)]
         figure = matplotlib.pyplot.figure(figsize=(20,10))
         axes = figure.add_subplot(1, 1, 1)
-        binned_data, bin_edges, patches = axes.hist(self.t_list, bins=n_bins)
+        binned_data, bin_edges, patches = axes.hist(self.t_list, bins=t_bins)
         axes.set_title("Beam Monitor")
         axes.set_xlabel("time [ns]")
         axes.set_ylabel("N")
         model.plot_rf_data(axes, 100)
         figure.savefig(os.path.join(output_directory, "monitor.png"))
         with open(os.path.join(output_directory, "monitor.dat"), "w") as fout:
-            for i in range(n_bins):
+            for i in range(len(binned_data)):
                 fout.write(f"{bin_edges[i]} {binned_data[i]}\n")
         tmin, tmax = t0, dt
         index = 0
@@ -323,7 +323,10 @@ class PlotBeam(object):
         # time projection
         axes = figure.add_subplot(1, 1, 1,  position=[0.1, 0.1, 0.6, 0.2])
         axes.set_xlabel("$[t_i*f_0 - floor(t_i*f_0)] \\times 360$")
-        axes.hist(t_list, bins=self.t_bins)
+        t_hist, t_bin_list, patches = axes.hist(t_list, bins=self.t_bins)
+        min_t, max_t = min(t_hist), max(t_hist)
+        axes.text(0.8, 0.1, f"min, max: {min_t:.1f}, {max_t:.1f}",
+                  transform=axes.transAxes)
         self.plot_echange(axes, p_list[0], model)
         axes.set_xlim(self.t_bins[0], self.t_bins[-1])
 
@@ -476,7 +479,7 @@ def main_frequency_ramp():
     t0 = model.get_time_of_flight(p_start)
     t1 = model.get_time_of_flight(p_end)
     ramp_time = 0.1
-    hold_time = 10
+    hold_time = 1000
 
     p_mid = Particle(t0, p_start.energy, BeamFactory.mass)
     p_list = [p_mid]+BeamFactory.make_coasting_beam_square(10000, 57.7, 57.800001, n_turns=2, model=model)
@@ -499,6 +502,50 @@ def main_frequency_ramp():
     print("Done tracking - finishing up")
     figure = monitor.do_plot(10, output_directory, model)
     model.write_rf_data(output_directory+"/rf.dat", 10.0, max_time)
+
+def main_constant_bucket(energy, energy_spread, rf_voltage, nominal_rf_energy, r0_actual, r0_nominal, n_turns, output_dir):
+    model = LongitudinalModel()
+    model.r0 = r0_nominal
+    p_nominal = Particle(0, nominal_rf_energy, BeamFactory.mass)
+    t_nominal = model.get_time_of_flight(p_nominal)
+    track_time = n_turns*t_nominal
+
+    p_mid = Particle(0.0, energy, BeamFactory.mass)
+    e_0 = energy - energy_spread/2
+    e_1 = energy + energy_spread/2
+    p_list = [p_mid]+BeamFactory.make_coasting_beam_square(10000, e_0, e_1, n_turns=2, model=model)
+    program = PiecewiseInterpolation()
+    program.f_list = [1.0/t_nominal, 1.0/t_nominal]
+    program.t_list = [0, track_time*10]
+    program.v_list = [rf_voltage]*len(program.t_list)
+    program.setup(track_time*1.1)
+
+    model.rf_program = program
+    model.r0 = r0_actual
+    monitor = BeamMonitor()
+    output_directory = f"output/kurns_v4/{output_dir}"
+    utilities.clear_dir(output_directory)
+
+    turn_action = TurnAction(program, monitor, model, plot_contours=True)
+    turn_action.plot_frequency = 10
+    turn_action.output_directory = output_directory
+    model.do_turn_action = turn_action.do_turn_action
+    model.track_beam(max_time = track_time, max_turn = None, particle_collection=p_list)
+    print("Done tracking - finishing up")
+    figure = monitor.do_plot(10, output_directory, model)
+    json_config = {
+        "energy":energy,
+        "energy_spread":energy_spread,
+        "rf_voltage":rf_voltage,
+        "nominal_rf_energy":nominal_rf_energy,
+        "r0_actual":r0_actual,
+        "r0_nominal":r0_nominal,
+        "output_dir":output_dir,
+        "rf_frequency":1.0/t_nominal,
+    }
+    fout = open(output_directory + "/config.json", "w")
+    fout.write(json.dumps(json_config, indent=2))
+    model.write_rf_data(output_directory+"/rf.dat", 10.0, track_time)
 
 def main_lemc():
     BeamFactory.mass = 105.658
@@ -531,10 +578,25 @@ def main_lemc():
     model.do_turn_action = turn_action.do_turn_action
     model.track_beam(max_time = 30, max_turn = None, particle_collection=p_list)
 
-if __name__ == "__main__":
-    main_lemc()
-    #test()
-    #matplotlib.pyplot.show(block=False)
-    #input("Press <CR> to finish")
+def main_fork(config):
+    a_pid = os.fork()
+    if a_pid == 0: # the child process
+        main_constant_bucket(*config)
+        # hard exit returning 0 - don't want to end up in any exit handling
+        # stuff, just die ungracefully now the simulation has run
+        os._exit(0)
+    else:
+        retvalue = os.waitpid(a_pid, 0)[1]
+    if retvalue != 0:
+        # it means we never reached os._exit(0)
+        raise RuntimeError("Opal failed returning "+str(retvalue))
+    print("PARENT - exiting main_fork")
 
+if __name__ == "__main__":
+    for i in range(6):
+        config = (57+i*0.1, 0.1, 0.004, 56, 4540, 4540, 2000, f"constant_bucket_central_energy_{i}")
+        main_fork(config)
+    for i in range(6):
+        config = (57+i*0.1, 0.001, 0.004, 56, 4540, 4540, 2000, f"constant_bucket_central_energy_no_e_spread_{i}")
+        main_fork(config)
 
