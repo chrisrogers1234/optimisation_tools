@@ -6,7 +6,10 @@ import numpy
 import scipy
 from scipy.integrate import odeint, solve_ivp
 import matplotlib
-import ROOT
+try:
+    import ROOT
+except:
+    pass
 
 import xboa.common
 import xboa.hit

@@ -34,17 +34,27 @@ from xboa.hit import Hit
 from xboa.tracking import TrackingBase 
 
 class StoreDataInMemory(object):
-    def __init__(self, config):
-        self.ignore = config.tracking["ignore_events"]
-        self.verbose = config.tracking["verbose"]
-        self.dt_tolerance = config.tracking["dt_tolerance"]
-        self.station_dt_tolerance = config.tracking["station_dt_tolerance"]
+    def __init__(self, config = None):
+        self.ignore = []
+        self.verbose = 0
+        self.dt_tolerance = 1.0
+        self.station_dt_tolerance = 1.0
         self.hit_dict_of_lists = {}
-        try:
-            self.coordinate_transform = \
+        self.coordinate_transform = self.coord_dict["azimuthal"]
+        if config:
+            self.load_config(config)
+
+    def load_config(self, config):
+        if config:
+            self.ignore = config.tracking["ignore_events"]
+            self.verbose = config.tracking["verbose"]
+            self.dt_tolerance = config.tracking["dt_tolerance"]
+            self.station_dt_tolerance = config.tracking["station_dt_tolerance"]
+            try:
+                self.coordinate_transform = \
                   self.coord_dict[config.tracking["analysis_coordinate_system"]]
-        except ValueError:
-            self.coordinate_transform = "azimuthal"
+            except ValueError:
+                pass
 
     def process_hit(self, event, hit):
         if event in self.ignore:
@@ -202,21 +212,11 @@ class OpalTracking(TrackingBase):
         self.verbose = True
         self.beam_filename = beam_filename
         self.lattice_filename = lattice_filename
-        if type(output_filename) == type(""):
-            output_filename = {output_filename:(None, None)}
-        elif type(output_filename) == type([]):
-            output_filename = dict([(name, (None, None)) for name in output_filename])
-        elif type(output_filename) == type({}):
-            pass
-        elif output_filename == None:
-            output_filename = None
-        else:
-            raise(RuntimeError("Did not understand filename type "+str(output_filename)))
-        self.output_name_dict = output_filename
+        self.setup_output_filename(output_filename)
         self.opal_path = opal_path
-        if not os.path.isfile(self.opal_path):
-            raise RuntimeError(str(self.opal_path)+" does not appear to exist."+\
-                  " Check that this points to the opal executable.")
+        #if not os.path.isfile(self.opal_path):
+        #    raise RuntimeError(str(self.opal_path)+" does not appear to exist."+\
+        #          " Check that this points to the opal executable.")
         self.ref = reference_hit
         self.last = None
         self.pass_through_analysis = None
@@ -229,9 +229,21 @@ class OpalTracking(TrackingBase):
         self.mpi = mpi
         self.flags = []
         self.clear_path = None
-        self.min_track_number = 1 # minimum number of tracks
         self._read_probes = self._read_ascii_probes
         self.name_dict = {}
+
+    def setup_output_filename(self, output_filename):
+        if type(output_filename) == type(""):
+            output_filename = {output_filename:(None, None)}
+        elif type(output_filename) == type([]):
+            output_filename = dict([(name, (None, None)) for name in output_filename])
+        elif type(output_filename) == type({}):
+            pass
+        elif output_filename == None:
+            output_filename = None
+        else:
+            raise(RuntimeError("Did not understand filename type "+str(output_filename)))
+        self.output_name_dict = output_filename
 
     def get_name_dict(self):
         """
@@ -338,64 +350,51 @@ class OpalTracking(TrackingBase):
 
     def open_subprocess(self):
         command = [self.opal_path, self.lattice_filename]+self.flags
-        will_do_bsub = False
         if self.mpi != None:
-            try:
-                subprocess.check_call(["bsub", "-V"])
-                will_do_bsub = True
-                bsub_command = ["bsub",
-                                "-n", str(self.n_cores),
-                                "-q", 'scarf-ibis',
-                                "-W", "24:00",
-                                "-o", self.log_filename,
-                                "-K", ]
-                command = bsub_command+[self.mpi]+command
-            except OSError:
-                command = [self.mpi, "-n", str(self.n_cores)]+command
-        if will_do_bsub:
-            log = open("scarf.log", "w")
-        else:
-            log = open(self.log_filename, "w")
+            output = subprocess.check_output(["mpirun", "--version"])
+            if "MPI" not in str(output):
+                raise RuntimeError(f"'mpirun --version' fails with {output}")
+            command = ["mpirun"]+command
+        log = open(self.log_filename, "w")
 
         proc = subprocess.Popen(command,
                                 stdout=log,
                                 stderr=subprocess.STDOUT)
         return proc
 
-    def _tracking(self, list_of_hits):
-        if self.verbose:
-            print("Tracking in dir", os.getcwd(),
-                  "\n   using logfile", self.log_filename)
-        open(self.lattice_filename).close() # check that lattice exists
+    @classmethod
+    def setup_dist_file(cls, list_of_hits, file_name, reference_hit, verbose):
+        print(file_name, len(list_of_hits))
+        fout = open(file_name, "w")
+        # OPAL goes into odd modes if there are < 2 entries in the beam file
+        while len(list_of_hits) > 0 and len(list_of_hits) < cls.min_track_number:
+            list_of_hits.append(list_of_hits[-1])
+        print("After stretching", len(list_of_hits))
+        print(len(list_of_hits), file=fout)
         metres, GeV, seconds = common.units["m"], common.units["GeV"], common.units["s"]
         p_mass = common.pdg_pid_to_mass[2212]
-        fout = open(self.beam_filename, "w")
-        # OPAL goes into odd modes if there are < 2 entries in the beam file
-        while len(list_of_hits) > 0 and len(list_of_hits) < self.min_track_number:
-            list_of_hits.append(list_of_hits[-1])
-        print(len(list_of_hits), file=fout)
         for i, hit in enumerate(list_of_hits):
-            if self.verbose:
+            if verbose:
                 if i == 0:
                     print('           ', end=' ')
-                    for key in self.print_keys:
+                    for key in cls.print_keys:
                         print(key.ljust(8), end=' ')
                     print('\n    ref ...', end=' ')
-                    for key in self.print_keys:
-                        print(str(round(self.ref[key], 3)).ljust(8), end=' ')
+                    for key in cls.print_keys:
+                        print(str(round(reference_hit[key], 3)).ljust(8), end=' ')
                 if i < 1 or i == len(list_of_hits)-1:
                     print('\n    hit ...', end=' ')
-                    for key in self.print_keys:
+                    for key in cls.print_keys:
                         print(str(round(hit[key], 3)).ljust(8), end=' ')
                     print()
                 if i == 1 and len(list_of_hits) > 2:
                     print("<", len(list_of_hits)-2, " more hits >")
-            x = (hit["x"]-self.ref["x"])/metres
-            y = (hit["y"]-self.ref["y"])/metres
+            x = (hit["x"]-reference_hit["x"])/metres
+            y = (hit["y"]-reference_hit["y"])/metres
             t = hit["t"]/seconds
-            px = (hit["px"]-self.ref["px"])/p_mass
-            py = (hit["py"]-self.ref["py"])/p_mass
-            pz = (hit["pz"]-self.ref["pz"])/p_mass
+            px = (hit["px"]-reference_hit["px"])/p_mass
+            py = (hit["py"]-reference_hit["py"])/p_mass
+            pz = (hit["pz"]-reference_hit["pz"])/p_mass
             if abs(hit["z"]) > 1e-9:
                 print("Attempt to make hit with z non-zero", hit["z"])
                 raise RuntimeError("z is not available in distribution input")
@@ -404,6 +403,13 @@ class OpalTracking(TrackingBase):
             else:
                 print(x, px, t, pz, y, py, file=fout)
         fout.close()
+
+    def _tracking(self, list_of_hits):
+        if self.verbose:
+            print("Tracking in dir", os.getcwd(),
+                  "\n   using logfile", self.log_filename)
+        open(self.lattice_filename).close() # check that lattice exists
+        self.setup_dist_file(list_of_hits, self.beam_filename, self.ref)
         self.cleanup()
         old_time = time.time()
         proc = self.open_subprocess()
@@ -434,7 +440,7 @@ class OpalTracking(TrackingBase):
         if file_dict == None:
             return []
         if len(file_dict) == 0:
-            name_list = str(self.output_name_list)
+            name_list = str(self.output_name_dict)
             raise IOError("Failed to load any probes from "+name_list)
         fin_list = []
         for file_name, station in sorted(file_dict.items()):
@@ -479,6 +485,7 @@ class OpalTracking(TrackingBase):
 
     def _read_h5_probes(self):
         # loop over files in the glob, read events and sort by event number
+        print("Entering read h5 probes")
         file_dict = self.get_name_dict()
         if self.verbose:
             print("Found following files", str(file_dict))
@@ -491,10 +498,10 @@ class OpalTracking(TrackingBase):
         for file_name, station in sorted(file_dict.items()):
             try:
                 file_list.append((h5py.File(file_name, 'r'), station, file_name))
-                print("Opened", file_name)
             except OSError:
                 pass
         hit = ""
+        print("Loading")
         for fin, tup, file_name in file_list:
             station, ev = tup
             try:
@@ -504,6 +511,7 @@ class OpalTracking(TrackingBase):
                 print("Failed in", file_name)
             for event, hit in hit_generator:
                 self.pass_through_analysis.process_hit(event, hit)
+        print("Loaded")
         self.last = self.pass_through_analysis.finalise()
         return self.last
 
@@ -546,3 +554,4 @@ class OpalTracking(TrackingBase):
     units = {"x":1000., "y":1000., "z":1000., "t":1e9}
 
     print_keys = ['x', 'y', 'z', 'px', 'py', 'pz', 'kinetic_energy', 't']
+    min_track_number = 11

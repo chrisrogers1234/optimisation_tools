@@ -1,3 +1,4 @@
+import json
 import time
 import os
 import sys
@@ -12,17 +13,23 @@ PROC_QUEUE = []
 PROC_RUNNING = []
 UNIQUE_ID = 0
 N_PROCS = 3
-TARGET_SCRIPT = "run_sim.py"
+TARGET_SCRIPT = "run_many_"
 TIME_0 = time.time()
 
 def do_at_exit():
-    pgid = os.getpgid(os.getpid())
-    print("Killing all child processes of process group", pgid, "... good bye")
-    print("Daisy, daisy, give me your answer do")
-    print("I'm... half ... crazy ... ...")
-    print("all ... ... for ...")
-    print("the ... ... ...")
-    os.killpg(pgid, signal.SIGKILL)
+    proc_queue = poll()
+    if is_scarf():
+        print("Killing all child processes ... good bye")
+        for jobid, name in proc_queue:
+            subprocess.check_output(['scancel', jobid])
+            print("   ", jobid)
+        proc_queue = poll()
+        print(len(proc_queue), "processes left")
+    else:
+        pgid = os.getpgid(os.getpid())
+        print("Killing all child processes of process group", pgid, "... good bye")
+        os.killpg(pgid, signal.SIGKILL)
+    print("Au revoir")
 
 def will_make_new_procs(temp_proc_queue):
     global PROC_QUEUE, N_PROCS
@@ -30,33 +37,35 @@ def will_make_new_procs(temp_proc_queue):
 
 def poll_process_queue():
     global UNIQUE_ID, PROC_RUNNING, PROC_QUEUE, TIME
-    if is_scarf():
-        temp_proc_queue = poll_scarf()
-    else:
-        temp_proc_queue = poll_laptop()
     print("\r", round(time.time()-TIME_0, 1), "...",
           "Running", len(PROC_RUNNING), 
           "with", len(PROC_QUEUE), "queued", end=" ")
+    temp_proc_queue = poll()
     if will_make_new_procs(temp_proc_queue):
         print()
     while will_make_new_procs(temp_proc_queue):
         subproc_args, logname = PROC_QUEUE.pop(0)
         UNIQUE_ID += 1
         job_log = "logs/"+logname+".log"
+        job_name = f"run_many_{UNIQUE_ID}"
         if is_scarf():
-            subproc_args = ['bsub',
-                            '-q', 'scarf-ibis',
-                            '-n', '1',
-                            '-W', '72:00',
-                            '-o', job_log]+subproc_args
-            logfile = open("logs/"+logname+".bsub", "w")
+            subproc_args = ["salloc", "--job-name", job_name, "-N1", "srun", "-n1", "-t5", "-o", job_log, "-e", job_log, "--job-name", job_name]+subproc_args
+            srun_log = f"logs/{job_name}.log"
+            logfile = open(srun_log, "w")
         else:
             logfile = open(job_log, "w")
-        temp_proc_queue.append(subprocess.Popen(subproc_args,
-                               stdout=logfile, stderr=subprocess.STDOUT))
-        print("Running", subproc_args, "with log", job_log,
-              "pid", temp_proc_queue[-1].pid, len(PROC_RUNNING))
+        subprocess.Popen(subproc_args, stdout=logfile, stderr=subprocess.STDOUT)
+        temp_proc_queue.append((None, None))
+        print("Running", subproc_args, "with log", job_log)
+        time.sleep(1)
     PROC_RUNNING = temp_proc_queue
+
+def poll():
+    if is_scarf():
+        temp_proc_queue = poll_scarf()
+    else:
+        temp_proc_queue = poll_laptop()
+    return temp_proc_queue
 
 def poll_laptop():
     temp_proc_queue = []
@@ -70,17 +79,23 @@ def poll_laptop():
 
 def poll_scarf():
     global TARGET_SCRIPT
-    output = subprocess.check_output(['bjobs', '-w'])
-    lines = output.split('\n')[1:]
-    script_lines = []
+    output = subprocess.check_output(['squeue', '--me', '-O', 'JobID,Name'])
+    output = output.decode('utf-8')
+    lines = output.split('\n')
+    temp_proc_queue = []
     for line in lines:
         if TARGET_SCRIPT not in line:
             continue
-        p_index = line.index('python')
-        line = line[p_index:]
-        line.split(' ')
-        script_lines.append(line)
-    return script_lines
+        words = line.split()
+        if len(words) != 2:
+            raise RuntimeError(f"could not parse line {line}")
+        proc = words[0]
+        jobname = words[1]
+        temp_proc_queue.append( (proc, jobname) )
+    for proc, jobname in PROC_RUNNING:
+        if proc != None and proc not in [item[0] for item in temp_proc_queue]:
+            print("\nJobId", proc, "finished")
+    return temp_proc_queue
 
 def is_scarf():
     uname = str(subprocess.check_output(['uname', '-a']))
@@ -101,7 +116,7 @@ def main(config_file):
     if not os.path.exists("logs"):
         os.makedirs("logs")
     if is_scarf():
-        N_PROCS = 150
+        N_PROCS = 20
     for config in configs:
         print("Setting config", config)
         log_file = config[0].split("/")[-1]

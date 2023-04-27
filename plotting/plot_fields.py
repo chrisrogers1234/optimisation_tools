@@ -17,6 +17,16 @@ import xboa.common
 import optimisation_tools.utils.utilities
 import optimisation_tools.plotting.plot as plot
 import pyopal.objects.parser
+import pyopal.objects.track_run
+
+def pybase():
+    base_dir = "output/2022-12-01_baseline/baseline/"
+    run_dir = "tmp/find_closed_orbits"
+    name = "pybase"
+    orbit_folder_list = [os.path.join(base_dir, "tmp/find_closed_orbits")]
+    plot_range = [0, 180]
+    return base_dir, run_dir, orbit_folder_list, plot_range, name, "fets_ffa"
+
 
 def closed_orbits_k_vary():
     base_dir = "output/2022-07-01_baseline/bump_quest_v8/"
@@ -73,7 +83,7 @@ def generate_name(orbit_folder):
     return "k="+orbit_folder
 
 def plot_azimuthal():
-    base_dir, run_dir, orbit_folder_list, plot_range, job_name, lattice_name = track_bump()
+    base_dir, run_dir, orbit_folder_list, plot_range, job_name, lattice_name = pybase()
     r0 = 4.0
     orbit_folder_list = [(o, generate_name(o)) for o in orbit_folder_list]
     probe_files = "*PROBE*.h5" #"FOILPROBE_1.h5" #
@@ -114,21 +124,15 @@ def plot_azimuthal():
     print("Figure saved as", figname)
 
 def plot_beam():
-    base_dir, run_dir, orbit_folder_list, plot_range, job_name, lattice_name = find_bump()
-    #base_dir = "output/2022-07-01_baseline/bump_quest_v8/find_bump_r0=-000_by=0.00"
-    #run_dir = "tmp/find_closed_orbits/"
-    #orbit_folder_list = [os.path.join(base_dir, run_dir)]
-    #plot_range = [0.0, 360]
-    #lattice_name = "FETS_Ring"
-    #job_name = "closed_orbit_bump"
+    base_dir, run_dir, orbit_folder_list, plot_range, job_name, lattice_name = pybase()
     rmax = 5.0
     b0 = 1.0
     orbit_folder_list = [(orbit, generate_name(orbit)) for orbit in orbit_folder_list]
     probe_files = "*PROBE*.h5" #"FOILPROBE_1.h5" #
-    lattice_file = os.path.join(base_dir, run_dir+"/"+lattice_name+".tmp")
+    lattice_file = os.path.join(base_dir, run_dir+"/run_"+lattice_name+".py")
     log_file = os.path.join(base_dir, run_dir+"log")
     angle_domain = [-0.0, 360.0]
-    allowed_events = ["ID1"]
+    allowed_events = None #["ID1"]
     plot.LoadOrbit.azimuthal_domain = angle_domain
     plot.LoadH5.azimuthal_domain = angle_domain
     test_function = lambda words: words[1]**2+words[3]**2 > (rmax)**2
@@ -159,8 +163,8 @@ def plot_beam():
 
 def main():
     #test()
-    #plot_beam()
-    plot_azimuthal()
+    plot_beam()
+    #plot_azimuthal()
     #plot_rf()
 
 if __name__ == "__main__":

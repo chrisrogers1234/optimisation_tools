@@ -27,7 +27,6 @@ import glob
 import math
 import sys
 import shutil
-import h5py
 
 from xboa import common
 import xboa.hit

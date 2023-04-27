@@ -18,6 +18,7 @@ from optimisation_tools.opal_tracking import OpalTracking
 from optimisation_tools.opal_tracking import G4BLTracking
 from optimisation_tools.opal_tracking import StoreDataInMemory
 from optimisation_tools.opal_tracking import PyOpalTracking
+from optimisation_tools.opal_tracking import PyOpalTracking2
 
 import matplotlib
 import matplotlib.pyplot
@@ -64,9 +65,9 @@ def preprocess_subs(subs):
             list_str += str(value[-1])+"}"
             subs[key] = list_str
         elif value is True:
-            subs[key] = "TRUE"
+            subs[key] = "True" #"TRUE"
         elif value is False:
-            subs[key] = "FALSE"
+            subs[key] = "False" #"FALSE"
     return subs
 
 def dict_compare(list_of_dicts, include_missing=True, float_tolerance=1e-9):
@@ -114,7 +115,10 @@ def do_lattice(config, subs, overrides, hit_list = None):
     if len(lattice_out) != len(lattice_in):
         raise ValueError(f"lattice in length did not match lattice out length {lattice_in}, {lattice_out}")
     for lin, lout in zip(lattice_in, lattice_out):
-        xboa.common.substitute(lin, lout, subs)
+        if will_do_python:
+            xboa.common.substitute(lin, lout, {})
+        else:
+            xboa.common.substitute(lin, lout, subs)
     out_dir = os.path.dirname(lattice_out[0])
     with open(os.path.join(out_dir, "subs.json"), "w") as out_file:
         out_file.write(json.dumps(subs, indent=2))
@@ -136,15 +140,23 @@ def reference(config, energy, x=0., px=0., y=0., py=0.):
     hit = xboa.hit.Hit.new_from_dict(hit_dict, "pz")
     return hit
 
+def will_do_python(config):
+    return config.tracking["opal_path"] == "python"
+
 def setup_tracking(config, probes, ref_energy):
     if config.tracking["opal_path"] == None:
         return setup_tracking_g4bl(config, probes, ref_energy)
+    if will_do_python(config):
+        return setup_py_tracking_2(config, probes, ref_energy)
     ref_hit = reference(config, ref_energy)
     opal_exe = os.path.expandvars(config.tracking["opal_path"])
     lattice = config.tracking["lattice_file_out"]
+    if type(lattice) == type([]):
+        lattice = lattice[0]
     log = config.tracking["tracking_log"]
     beam = config.tracking["beam_file_out"]
-    tracking = OpalTracking(lattice, beam, ref_hit, probes, opal_exe, log)
+    will_do_mpi = config.tracking["will_do_mpi"]
+    tracking = OpalTracking(lattice, beam, ref_hit, probes, opal_exe, log, 1, will_do_mpi)
     tracking.verbose = config.tracking["verbose"]
     tracking.set_file_format(config.tracking["file_format"])
     tracking.flags = config.tracking["flags"]
@@ -176,6 +188,14 @@ def setup_py_tracking(config, run_dir, phi_list):
     tracking.step_list = phi_list
     PY_OPAL_TRACKING = tracking
     return tracking
+
+def setup_py_tracking_2(config, probes, ref_energy):
+    ref_hit = reference(config, ref_energy)
+    tracking = PyOpalTracking2(config, probes, ref_hit)
+    tracking.pass_through_analysis = StoreDataInMemory(config)
+    tracking.set_file_format(config.tracking["file_format"])
+    return tracking
+
 
 def tune_lines(canvas, min_order=0, max_order=8):
     canvas.cd()
@@ -382,9 +402,6 @@ def get_config(path_code="scripts/"):
     print(config_path, config_file_name)
     config_module = config_file_name.replace(".py", "")
     sys.path.append(config_path)
-    #print(path_code, sys.argv[1])
-    #config_file = config_file.split(path_code)[1]
-    #config_file = config_file.replace("/", ".")
     config_args = tuple(sys.argv[2:])
     print("Using configuration module", config_module, "with arguments", config_args)
     config_mod = importlib.import_module(config_module)

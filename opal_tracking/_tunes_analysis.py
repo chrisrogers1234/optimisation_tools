@@ -20,7 +20,10 @@
 
 import math
 import numpy
-import ROOT
+try:
+    import ROOT
+except:
+    pass
 
 import xboa.common
 

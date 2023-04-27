@@ -5,6 +5,7 @@ import copy
 import os
 import shutil
 import time
+import ctypes
 
 import ROOT
 import numpy
@@ -97,6 +98,7 @@ class ClosedOrbitFinder4D(object):
             hit_list.insert(0, hit_list[0])
             track_list = self.tracking.track_many(hit_list)
         os.chdir(self.here)
+        print("Tracking generated", [len(track) for track in track_list])
         return track_list
 
     def get_decoupled(self, tm):
@@ -116,6 +118,14 @@ class ClosedOrbitFinder4D(object):
         decoupled = DecoupledTransferMatrix(m)
         return decoupled
 
+    def print_dm(self, dm):
+        print(self.str_matrix(dm.m, fmt="20.6f"))
+        print("Determinant:  ", numpy.linalg.det(dm.m))
+        print("Symplecticity:")
+        print(self.str_matrix(dm.simplecticity(dm.m), fmt="20.6f"))
+        print("Tune:", [dm.get_phase_advance(i)/math.pi/2. for i in range(2)])
+
+
     def get_co(self, tm):
         # \vec{x} = \vec{m} + \matrix{M} \vec{x}
         # Solve (\matrix{1} - \matrix{M}) \vec{x} = \vec{m}
@@ -126,11 +136,12 @@ class ClosedOrbitFinder4D(object):
         #print(self.str_matrix(m, fmt="20.6f"))
         try:
             dm = self.get_decoupled(tm)
-            print(self.str_matrix(m, fmt="20.6f"))
-            print("Determinant:  ", numpy.linalg.det(dm.m))
-            print("Symplecticity:")
-            print(self.str_matrix(dm.simplecticity(dm.m), fmt="20.6f"))
-            print("Tune:", [dm.get_phase_advance(i)/math.pi/2. for i in range(2)])
+            self.print_dm(dm)
+            #print(self.str_matrix(m, fmt="20.6f"))
+            #print("Determinant:  ", numpy.linalg.det(dm.m))
+            #print("Symplecticity:")
+            #print(self.str_matrix(dm.simplecticity(dm.m), fmt="20.6f"))
+            #print("Tune:", [dm.get_phase_advance(i)/math.pi/2. for i in range(2)])
         except Exception:
             sys.excepthook(*sys.exc_info())
             sf = math.sin(math.pi/4)
@@ -244,12 +255,12 @@ class ClosedOrbitFinder4D(object):
                 decoupled = tm.decoupled(coupled)
                 print(self.str_matrix(decoupled))
             except Exception:
+                sys.excepthook(*sys.exc_info())
                 continue
 
     def tm_co_fitter(self, seeds, max_iter = None):
         output = {}
         dim = len(seeds)
-        print("DIMENSION", dim)
         tolerance = self.config_co["tolerance"]
         if max_iter == None:
             max_iter = self.config_co["max_iterations"]
@@ -387,6 +398,9 @@ class ClosedOrbitFinder4D(object):
                     output["tm_list"] = [self.fit_matrix_2(tm_list_of_lists[0], tm_list) for tm_list in tm_list_of_lists]
                     self.print_ref_track(a_track, output["seed"], None)
                     self.track_many([], 0.0, "plotting_subs")
+                    dm = self.get_decoupled(output["tm_list"][1])
+                    print("Closing with TM:")
+                    self.print_dm(dm)
                 except Exception:
                     sys.excepthook(*sys.exc_info())
                 self.save_track_orbit()
@@ -424,20 +438,25 @@ class ClosedOrbitFinder4D(object):
             if var in force:
                 self.minuit.FixParameter(i)
 
-        self.minuit.SetFCN(self.minuit_function)
+        global CO_FINDER
+        CO_FINDER = self
+        self.minuit.SetFCN(minuit_function)
         try:
             self.minuit.Command("SIMPLEX "+str(n_iterations)+" "+str(target_score))
         except Exception:
+            sys.excepthook(*sys.exc_info())
             print(f"Terminated after {self.iteration_number}/{n_iterations} iterations")
         return self.get_minuit_hit()
 
     def get_minuit_hit(self):
         seed = [None]*4
         for i, var in enumerate(self.var_list):
-            x = ROOT.Double()
-            err = ROOT.Double()
+            x = ctypes.c_double()
+            err = ctypes.c_double()
             self.minuit.GetParameter(i, x, err)
-            seed[i]  = float(x)
+            seed[i]  = float(x.value)
+            x = None
+            err = None
         hit = self.seed_to_hit(seed, 0)
         return seed
 
@@ -455,7 +474,7 @@ class ClosedOrbitFinder4D(object):
             for var in self.var_list:
                 print(var.ljust(4), format(hit[var], "14.10g"), end=" ")
             print()
-        score[0] = 0.0
+        score.value = 0.0
         print("Scores")
         for var in self.var_list:
             try:
@@ -465,17 +484,22 @@ class ClosedOrbitFinder4D(object):
                     print("Seed did not work")
                     raise
                 else:
-                    score[0] = max(self.minuit_score_list)*10
+                    score.value = max(self.minuit_score_list)*10
             delta = numpy.std(value_list)
-            score[0] += delta/self.opt_errs[var]
+            score.value += delta/self.opt_errs[var]
             print(var.ljust(4), format(delta, "14.10g"), end=" ")
-        print("Total", score[0])
-        self.minuit_score_list.append(score[0])
+        print("Total", score.value)
+        self.minuit_score_list.append(score.value)
         self.iteration_number += 1
         if self.iteration_number > self.config_co["minuit_iterations"]:
             raise StopIteration("Max iterations exceeded")
 
     run_index = 1
+
+global CO_FINDER
+def minuit_function(nvar, parameters, score, jacobian, err):
+    global CO_FINDER
+    CO_FINDER.minuit_function(nvar, parameters, score, jacobian, err)
 
 def main(config):
     co_finder = ClosedOrbitFinder4D(config)

@@ -1,4 +1,7 @@
-import ROOT
+try:
+    import ROOT
+except ImportError:
+    pass
 import xboa.common
 
 class PhaseSpacePlots(object):

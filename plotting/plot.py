@@ -14,6 +14,7 @@ import json
 import bisect
 import numpy
 import math
+import importlib
 
 import itertools
 
@@ -34,8 +35,13 @@ class GetFields(object):
         self.dx = 0.001
         self.dt = 0.001
         self.lattice_file = lattice_file
-        self.hack_lattice()
-        self.load_lattice()
+        if self.lattice_file[-3:] == ".py":
+            print("Detected python script, loading")
+            self.python_lattice()
+        else:
+            print("Assume this is an opal lattice, loading")
+            self.hack_lattice()
+            self.load_lattice()
 
     def hack_lattice(self):
         source = self.lattice_file
@@ -65,6 +71,13 @@ class GetFields(object):
             fout.write(line)
         self.lattice_file = target
         fin.close()
+
+    def python_lattice(self):
+        script_path, script_file_name = os.path.split(self.lattice_file)
+        script_module = script_file_name.replace(".py", "")
+        sys.path.append(script_path)
+        script_mod = importlib.import_module(script_module)
+        script_mod.build_field()
 
     def load_lattice(self):
         here = os.getcwd()
@@ -228,7 +241,7 @@ class LoadOrbit(object):
                     break
                 for i, item in enumerate(heading):
                     self.orbit[item].append(words[i])
-        print("Got", len(self.orbit["x"]), "/", line_count, "lines from file "+self.file_name)
+        print("Got", len(self.orbit["x"]), "/", line_count, "lines from file "+self.file_name, "with allowed_id:", self.allowed_id)
 
     @classmethod
     def fix_domain(self, phi):
