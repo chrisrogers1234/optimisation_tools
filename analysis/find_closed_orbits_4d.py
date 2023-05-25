@@ -56,6 +56,8 @@ class ClosedOrbitFinder4D(object):
         for i, var in enumerate(self.var_list):
             hit[var] = seed[i]
         hit.mass_shell_condition("pz") # adjust pz so E^2 = p^2 + m^2
+        v_list = ["px", "py", "pz", "x'", "y'"]
+        ref = utilities.reference(self.config, self.energy)
         return hit
 
     @classmethod
@@ -87,7 +89,7 @@ class ClosedOrbitFinder4D(object):
         overrides["__n_particles__"] = len(seed_list)+1
         hit_list = []
         os.chdir(self.run_dir)
-        self.subs_tracking = utilities.do_lattice(self.config, self.subs, overrides)
+        self.subs_tracking = utilities.do_lattice(self.config, self.subs, overrides, [], self.tracking)
         if self.config_co["use_py_tracking"]:
             self.tracking = utilities.setup_py_tracking(self.config, self.run_dir, self.config_co["py_tracking_phi_list"])
         for seed in seed_list:
@@ -98,7 +100,6 @@ class ClosedOrbitFinder4D(object):
             hit_list.insert(0, hit_list[0])
             track_list = self.tracking.track_many(hit_list)
         os.chdir(self.here)
-        print("Tracking generated", [len(track) for track in track_list])
         return track_list
 
     def get_decoupled(self, tm):
@@ -272,8 +273,10 @@ class ClosedOrbitFinder4D(object):
                       [0., 0., 0., 0., 1., 0.],
                       [0., 0., 0., 0., 0., 1.]],
                 "substitutions":utilities.do_lattice(self.config,
-                                                           self.subs,
-                                                           self.config_co["subs_overrides"]),
+                                                     self.subs,
+                                                     self.config_co["subs_overrides"],
+                                                     [],
+                                                     self.tracking),
                 "errors":[-1],
             }
         deltas = self.config_co["deltas"][0:len(self.var_list)]
@@ -371,6 +374,7 @@ class ClosedOrbitFinder4D(object):
                 a_track = None
                 try:
                     self.var_list = self.var_list_1
+                    os.chdir(self.run_dir)
                     output = self.tm_co_fitter(seed)
                     output["seed_in"] = seed
                     output["seed_hit"] = self.seed_to_hit(output["seed"], 0.).dict_from_hit()

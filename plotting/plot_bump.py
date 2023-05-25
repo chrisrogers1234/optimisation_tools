@@ -46,6 +46,13 @@ class PlotBump(object):
         words[1] = float(words[1].split("/")[0])
         return [words[0], words[1]]
 
+    def extract_bump_fields(self, data):
+        bump_fields = [
+            (parameter["key"], parameter["current_value"]) for parameter in data["parameters"]
+        ]
+        data["bump_fields"] = dict(bump_fields)
+        print(data["bump_fields"])
+
     def load_files(self):
         index = 0
         file_list = []
@@ -63,7 +70,8 @@ class PlotBump(object):
                 self.data += self.load_one_file(file_name)
                 self.data[-1]["score"] = score+[self.data[-1]["score"]]
                 self.data[-1]["n_iterations"] = n_iterations+[self.data[-1]["n_iterations"]]
-        bump_fields = dict([(field, 0) for field in self.data[0]["bump_fields"]])
+                self.extract_bump_fields(self.data[-1])
+        bump_fields = dict([(parameter["key"], 0) for parameter in self.data[0]["parameters"]])
         self.data = [{ # reserve space for reference tracks
                 "tracking":[],
                 "bump_fields":bump_fields,
@@ -335,9 +343,9 @@ class PlotBump(object):
     }
 
 def main():
-    by = "0.20"
-    root_dir = "output/2022-07-01_baseline/bump_quest_v3"
-    file_list = glob.glob(root_dir+"/find_bump_r0=-*by="+by+"/find_bump_*_002.out")
+    by = "0.2"
+    root_dir = "output/2023-03-01_baseline/find_bump_v3"
+    file_list = glob.glob(root_dir+"/bump=-*by="+by+"/find_bump_*_002.out")
     plot_dir = root_dir+"/plot_bump_by="+by
     DecoupledTransferMatrix.det_tolerance = 1.0
 
@@ -350,21 +358,22 @@ def main():
     plotter.co_files = []
     plotter.setup()
 
-    plotter.target_probe = 4
+    plotter.target_probe = 0
     plotter.target_field = "__h_bump_2_field__"
     plotter.plot_fields(1)
     plotter.plot_fields(3)
-    plotter.plot_phased_var_2d(1, 3, ["score", "n_iterations"])
+    return
+    #plotter.plot_phased_var_2d(1, 3, ["score", "n_iterations"])
     for probe in [1, 2, 3, 0, 4, 5, 6, 7]:
         plotter.target_probe = probe
         try:
             plotter.plot_event_display(plotter.plot_lambda)
         except Exception:
             print("Failed at station", probe)
-    plotter.target_probe = 4
+    plotter.target_probe = 0
     plotter.print_field_substitutions()
 
-    plotter.target_probe = 2
+    plotter.target_probe = 0
     figure = matplotlib.pyplot.figure(figsize=(20,10))
     #for subplot, var in [(1, 10), (2, 12)]:
     axes = figure.add_subplot(1, 1, 1)

@@ -40,7 +40,7 @@ class StoreDataInMemory(object):
         self.dt_tolerance = 1.0
         self.station_dt_tolerance = 1.0
         self.hit_dict_of_lists = {}
-        self.coordinate_transform = self.coord_dict["azimuthal"]
+        self.coordinate_transform = self.coord_dict["azimuthal_clockwise"]
         if config:
             self.load_config(config)
 
@@ -66,7 +66,7 @@ class StoreDataInMemory(object):
     def clear(self):
         self.hit_dict_of_lists = {}
 
-    def azimuthal_coordinate_transform(self, hit_list_of_lists):
+    def azimuthal_coordinate_transform_anticlockwise(self, hit_list_of_lists):
         tmp_hit_list_of_lists = []
         for hit_list in hit_list_of_lists:
             tmp_hit_list = []
@@ -85,6 +85,27 @@ class StoreDataInMemory(object):
                 tmp_hit_list.append(hit)
             tmp_hit_list_of_lists.append(tmp_hit_list)
         return tmp_hit_list_of_lists
+
+    def azimuthal_coordinate_transform_clockwise(self, hit_list_of_lists):
+        tmp_hit_list_of_lists = []
+        for hit_list in hit_list_of_lists:
+            tmp_hit_list = []
+            for hit in hit_list:
+                x = hit["x"]
+                y = hit["z"]
+                px = hit["px"]
+                py = hit["pz"]
+                phi = math.atan2(x, y)
+                hit["x"] = + y*math.cos(phi) + x*math.sin(phi)
+                hit["z"] = - y*math.sin(phi) + x*math.cos(phi)
+                hit["px"] = + px*math.sin(phi) + py*math.cos(phi)
+                # go through file line by line reading hit data
+                hit["pz"] = - py*math.sin(phi) + px*math.cos(phi)
+                hit.mass_shell_condition("energy")
+                tmp_hit_list.append(hit)
+            tmp_hit_list_of_lists.append(tmp_hit_list)
+        return tmp_hit_list_of_lists
+
 
     def dt_cut(self, hit_list_of_lists):
         if self.dt_tolerance == None:
@@ -182,7 +203,8 @@ class StoreDataInMemory(object):
     coord_dict = {
         "none":no_coordinate_transform,
         "opal":opal_coordinate_transform,
-        "azimuthal":azimuthal_coordinate_transform,
+        "azimuthal_clockwise":azimuthal_coordinate_transform_clockwise,
+        "azimuthal_anticlockwise":azimuthal_coordinate_transform_anticlockwise,
     }
 
     opal_dict = {"x":"z", "z":"x", "px":"pz", "pz":"px"}
@@ -364,12 +386,10 @@ class OpalTracking(TrackingBase):
 
     @classmethod
     def setup_dist_file(cls, list_of_hits, file_name, reference_hit, verbose):
-        print(file_name, len(list_of_hits))
         fout = open(file_name, "w")
         # OPAL goes into odd modes if there are < 2 entries in the beam file
         while len(list_of_hits) > 0 and len(list_of_hits) < cls.min_track_number:
             list_of_hits.append(list_of_hits[-1])
-        print("After stretching", len(list_of_hits))
         print(len(list_of_hits), file=fout)
         metres, GeV, seconds = common.units["m"], common.units["GeV"], common.units["s"]
         p_mass = common.pdg_pid_to_mass[2212]
@@ -485,7 +505,6 @@ class OpalTracking(TrackingBase):
 
     def _read_h5_probes(self):
         # loop over files in the glob, read events and sort by event number
-        print("Entering read h5 probes")
         file_dict = self.get_name_dict()
         if self.verbose:
             print("Found following files", str(file_dict))
@@ -501,7 +520,6 @@ class OpalTracking(TrackingBase):
             except OSError:
                 pass
         hit = ""
-        print("Loading")
         for fin, tup, file_name in file_list:
             station, ev = tup
             try:
@@ -511,7 +529,6 @@ class OpalTracking(TrackingBase):
                 print("Failed in", file_name)
             for event, hit in hit_generator:
                 self.pass_through_analysis.process_hit(event, hit)
-        print("Loaded")
         self.last = self.pass_through_analysis.finalise()
         return self.last
 

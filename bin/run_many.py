@@ -12,7 +12,7 @@ from optimisation_tools.utils import utilities
 PROC_QUEUE = []
 PROC_RUNNING = []
 UNIQUE_ID = 0
-N_PROCS = 3
+N_PROCS = 11
 TARGET_SCRIPT = "run_many_"
 TIME_0 = time.time()
 
@@ -54,8 +54,8 @@ def poll_process_queue():
             logfile = open(srun_log, "w")
         else:
             logfile = open(job_log, "w")
-        subprocess.Popen(subproc_args, stdout=logfile, stderr=subprocess.STDOUT)
-        temp_proc_queue.append((None, None))
+        proc = subprocess.Popen(subproc_args, stdout=logfile, stderr=subprocess.STDOUT)
+        temp_proc_queue.append((proc, job_name))
         print("Running", subproc_args, "with log", job_log)
         time.sleep(1)
     PROC_RUNNING = temp_proc_queue
@@ -69,9 +69,9 @@ def poll():
 
 def poll_laptop():
     temp_proc_queue = []
-    for proc in PROC_RUNNING:
+    for proc, jobname in PROC_RUNNING:
         if proc.poll() == None:
-            temp_proc_queue.append(proc)
+            temp_proc_queue.append((proc, jobname))
         else:
             print("\nPID", proc.pid, "finished with return code", proc.returncode)
     sys.stdout.flush()

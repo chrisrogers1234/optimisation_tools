@@ -10,10 +10,13 @@ from optimisation_tools.opal_tracking import OpalTracking
 import xboa.hit
 
 def import_my_lib(mod_file):
-    sys.path.append(os.path.split(mod_file)[0])
+    """This is a bit dark. Better to import in run_one.py and then make sure that setup does reload stuff"""
+    a_dir = os.path.split(mod_file)[0]
+    sys.path.append(a_dir)
     mod_name = os.path.splitext(os.path.split(mod_file)[1])[0]
-    print("Importing", mod_name, "in dir", os.getcwd())
     my_module = importlib.__import__(mod_name)
+    importlib.reload(my_module)
+    sys.path.remove(a_dir)
     return my_module
 
 class PyOpalTracking2(OpalTracking):
@@ -27,6 +30,7 @@ class PyOpalTracking2(OpalTracking):
         self.setup_output_filename(probes)
         self.name_dict = {}
         self._read_probes = self._read_ascii_probes
+        self.overrides = {}
 
     def setup(self):
         self.do_tracking = True
@@ -50,12 +54,17 @@ class PyOpalTracking2(OpalTracking):
         self.exec_module = import_my_lib(self.pyopal_file)
         old_time = time.time()
         try:
-            self.exec_module.main(self.config)
+            self.exec_module.main(self.config, self.overrides)
         except:
             sys.excepthook(*sys.exc_info())
             print("Tracking failed")
         if self.verbose:
             print("Ran for", time.time() - old_time, "s")
+            print(self.pyopal_file, os.getcwd())
+
+    def track_many(self, list_of_hits):
+        list_of_list_of_hits = super().track_many(list_of_hits)
+        return list_of_list_of_hits[1:]
 
 def setup_py_tracking_2(config, probes, reference_hit):
     tracking = PyOpalTracking2(config, probes, reference_hit)

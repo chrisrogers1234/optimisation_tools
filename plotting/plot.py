@@ -76,8 +76,17 @@ class GetFields(object):
         script_path, script_file_name = os.path.split(self.lattice_file)
         script_module = script_file_name.replace(".py", "")
         sys.path.append(script_path)
-        script_mod = importlib.import_module(script_module)
-        script_mod.build_field()
+        try:
+            here = os.getcwd()
+            script_mod = importlib.import_module(script_module)
+            importlib.reload(script_mod)
+            os.chdir(script_path)
+            script_mod.build_field()
+        except ModuleNotFoundError:
+            print("Failed to find python module", script_module, "in", os.getcwd(), "using", script_path)
+        finally:
+            sys.path.remove(script_path)
+            os.chdir(here)
 
     def load_lattice(self):
         here = os.getcwd()
@@ -209,10 +218,11 @@ class LoadLog(object):
 
 
 class LoadOrbit(object):
-    def __init__(self, file_name, allowed_id, test_function = None):
+    def __init__(self, file_name, allowed_id, disallowed_id=[], test_function = None):
         self.file_name = file_name
         self.orbit = {}
         self.allowed_id = allowed_id
+        self.disallowed_id = disallowed_id
         self.test_function = test_function
         self.parse_file()
         self.r_phi_track_file()
@@ -233,7 +243,8 @@ class LoadOrbit(object):
             else:
                 words = [self.types[i](x)*self.units[i] for i, x in enumerate(words)]
                 if self.allowed_id and words[0] not in self.allowed_id:
-                    #print("Rejecting id", words[0], self.allowed_id)
+                    continue
+                if self.disallowed_id and words[0] in self.disallowed_id:
                     continue
                 is_okay = self.test_function == None or not self.test_function(words)
                 if not is_okay:

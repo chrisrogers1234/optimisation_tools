@@ -99,13 +99,14 @@ def dict_compare(list_of_dicts, include_missing=True, float_tolerance=1e-9):
             delta_keys.append(key)
     return set(delta_keys)
 
-def do_lattice(config, subs, overrides, hit_list = None):
+def do_lattice(config, subs, overrides, hit_list = None, tracking = None):
     subs = copy.deepcopy(subs)
     subs.update(overrides)
     if hit_list:
         # WARNING - ignores min_track_number in opal_tracking
         subs.update({"__n_particles__":len(hit_list)})
-    subs = preprocess_subs(subs)
+    if not will_do_python(config):
+        subs = preprocess_subs(subs)
     lattice_in = config.tracking["lattice_file"]
     lattice_out = config.tracking["lattice_file_out"]
     if type(lattice_in) == type(""):
@@ -115,8 +116,11 @@ def do_lattice(config, subs, overrides, hit_list = None):
     if len(lattice_out) != len(lattice_in):
         raise ValueError(f"lattice in length did not match lattice out length {lattice_in}, {lattice_out}")
     for lin, lout in zip(lattice_in, lattice_out):
-        if will_do_python:
+        if will_do_python(config):
             xboa.common.substitute(lin, lout, {})
+            if tracking == None:
+                raise ValueError("Tracking was None but a value is needed when using python")
+            tracking.overrides = subs
         else:
             xboa.common.substitute(lin, lout, subs)
     out_dir = os.path.dirname(lattice_out[0])
@@ -136,7 +140,7 @@ def reference(config, energy, x=0., px=0., y=0., py=0.):
     hit_dict["px"] = px
     hit_dict["y"] = y
     hit_dict["py"] = py
-    hit_dict["kinetic_energy"] = energy
+    hit_dict["kinetic_energy"] = energy*1e3
     hit = xboa.hit.Hit.new_from_dict(hit_dict, "pz")
     return hit
 

@@ -2,6 +2,7 @@
 Script to find the RF set up; drives find closed orbit
 """
 
+import ctypes
 import time
 import os
 import sys
@@ -278,11 +279,11 @@ class Parameter(object):
         self.minuit_index = index
 
     def update_from_minuit(self, minuit):
-        value = ROOT.Double()
-        error = ROOT.Double()
+        value = ctypes.c_double()
+        error = ctypes.c_double()
         minuit.GetParameter(self.minuit_index, value, error)
-        self.current_value = float(value)
-        self.current_error = float(error)
+        self.current_value = value.value
+        self.current_error = error.value
 
     def update_to_subs(self, subs):
         subs[self.key] = self.current_value
@@ -308,9 +309,11 @@ class FindBumpParameters(object):
         self.store_index = 1
         self.opt_i = None
         self.parameters = []
+        self.tracking = None
         DecoupledTransferMatrix.det_tolerance = 1.
 
     def setup_minuit(self):
+        global BUMP_FINDER
         par_dict = dict([(par.key, par) for par in self.parameters])
         for parameter_dict in self.optimisation["parameters"]:
             key = parameter_dict["key"]
@@ -324,7 +327,8 @@ class FindBumpParameters(object):
         self.minuit = ROOT.TMinuit(len(self.optimisation["parameters"]))
         for i, parameter in enumerate(self.parameters):
             parameter.setup_minuit(i, self.minuit)
-        self.minuit.SetFCN(self.minuit_function)
+        BUMP_FINDER = self
+        self.minuit.SetFCN(minuit_function)
         self.minuit_function()
 
     def store_data(self):
@@ -450,12 +454,15 @@ class FindBumpParameters(object):
                 total_score += this_score
         return total_score
 
-    def minuit_function(self, nvar=None, parameters=None, score=[0], jacobian=None, err=None):
+    def minuit_function(self, nvar=None, parameters=None, score=ctypes.c_float(0.0), jacobian=None, err=None):
         self.update_parameters_from_minuit()
         # a bit stupid, to get the interface right we convert from minuit to 
         # dict to list to dict
         score_list = self.moo_function()
-        score[0] =  self.score
+        try:
+            score.value =  sum(self.score)
+        except TypeError:
+            score.value = self.score
 
     def moo_function(self):
         self.iteration += 1
@@ -484,7 +491,7 @@ class FindBumpParameters(object):
         for par in self.parameters:
             par.update_to_subs(self.overrides)
             print("    ", par.name, par.current_value)
-        utilities.do_lattice(self.config, self.subs, self.overrides, hit_list)
+        utilities.do_lattice(self.config, self.subs, self.overrides, hit_list, self.tracking)
 
     def cuts(self, hit_list):
         min_delta = self.config.find_bump_parameters["min_time_delta"]
@@ -501,7 +508,6 @@ class FindBumpParameters(object):
     def track(self):
         hit_list = [delta for delta in self.generate_delta()]
         if False:
-            print("Tracking")
             for hit in hit_list:
                 print(hit)
         for values in self.score_dict.values():
@@ -529,30 +535,36 @@ class FindBumpParameters(object):
         ref_probes = self.config.find_bump_parameters["ref_probe_files"]
         ref_energy = self.config.find_bump_parameters["energy"]
         # fix momentum
-        tracking = utilities.setup_tracking(self.config, ref_probes, ref_energy)
+        self.tracking = utilities.setup_tracking(self.config, ref_probes, ref_energy)
         hit_list = []
         for psv in psv_list:
-            my_hit = copy.deepcopy(tracking.ref)
+            my_hit = copy.deepcopy(self.tracking.ref)
             for var in psv:
                 my_hit[var] = psv[var]
-            pz2 = (tracking.ref["p"]**2-my_hit["px"]**2-my_hit["py"]**2)
+            pz2 = (self.tracking.ref["p"]**2-my_hit["px"]**2-my_hit["py"]**2)
             if pz2 <= 0:
-                print ("Ref p", tracking.ref["p"], "test px", my_hit["px"])
+                print ("Ref p", self.tracking.ref["p"], "test px", my_hit["px"])
                 raise ValueError("Could not track particle with complex momentum")
             my_hit["pz"] = pz2**0.5
             hit_list.append(my_hit)
         self.setup_subs(hit_list)
-        print("Reference kinetic energy:", tracking.ref["kinetic_energy"])
+        print("Reference kinetic energy:", self.tracking.ref["kinetic_energy"])
         print("Seed kinetic energy:     ", [hit["kinetic_energy"] for hit in hit_list], flush=True)
-        hit_list_of_lists = tracking.track_many(hit_list)
+        hit_list_of_lists = self.tracking.track_many(hit_list)
         print("Station to probe mapping:\n   ", end=' ')
-        for i, fname in enumerate(tracking.get_name_list()):
+        for i, fname in enumerate(self.tracking.get_name_list()):
             print("("+str(i)+",", fname+")", end=' ')
         print()
         return hit_list_of_lists
 
 
     root_algorithms = ["simplex", "migrad"]
+
+global BUMP_FINDER
+def minuit_function(nvar, parameters, score, jacobian, err):
+    global BUMP_FINDER
+    BUMP_FINDER.minuit_function(nvar, parameters, score, jacobian, err)
+
 
 def main(config):
     find_bump = FindBumpParameters(config)
