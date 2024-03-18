@@ -169,7 +169,7 @@ class StoreDataInMemory(object):
                 for i, hit1 in enumerate(station_hit_list[1:]):
                     hit0 = station_hit_list[i]
                     if hit1["t"] - hit0["t"] > self.station_dt_tolerance:
-                        hit1["station"] += max_station
+                        hit1["station"] += max_station*(i+1)
         return list_of_list_of_hits
 
     def no_coordinate_transform(self, hit_list_of_lists):
@@ -411,17 +411,17 @@ class OpalTracking(TrackingBase):
                     print("<", len(list_of_hits)-2, " more hits >")
             x = (hit["x"]-reference_hit["x"])/metres
             y = (hit["y"]-reference_hit["y"])/metres
-            t = hit["t"]/seconds
+            z = (hit["z"]-reference_hit["z"])/metres
             px = (hit["px"]-reference_hit["px"])/p_mass
             py = (hit["py"]-reference_hit["py"])/p_mass
             pz = (hit["pz"]-reference_hit["pz"])/p_mass
-            if abs(hit["z"]) > 1e-9:
-                print("Attempt to make hit with z non-zero", hit["z"])
-                raise RuntimeError("z is not available in distribution input")
+            if abs(hit["t"]) > 1e-9:
+                print("Attempt to make hit with t non-zero", hit["t"])
+                raise RuntimeError("t is not available in distribution input")
             if False:
-                print(x, px, y, py, t, pz, file=fout)
+                print(x, px, y, py, z, pz, file=fout)
             else:
-                print(x, px, t, pz, y, py, file=fout)
+                print(x, px, z, pz, y, py, file=fout)
         fout.close()
 
     def _tracking(self, list_of_hits):

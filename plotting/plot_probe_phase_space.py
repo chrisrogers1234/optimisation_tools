@@ -76,11 +76,11 @@ class PlotProbes(object):
         self.tracking.set_file_format("hdf5")
         self.tracking.name_dict
         self.plot_dir = plot_dir
-        my_config = config.Config(None, None)
+        my_config = config.Config(-0.0, 0.2, 0.0)
         my_config.tracking["verbose"] = 100
         my_config.tracking["station_dt_tolerance"] = 10.0
         my_config.tracking["dt_tolerance"] = -1.0
-        my_config.tracking["analysis_coordinate_system"] = "azimuthal"
+        my_config.tracking["analysis_coordinate_system"] = "azimuthal_anticlockwise"
         self.extras = ['t', 'event_number', 'kinetic_energy']
         self.extras_labels = ['time [ns]', 'event number', 'Kinetic Energy [MeV]']
         self.probe_data = optimisation_tools.opal_tracking._opal_tracking.StoreDataInMemory(my_config)
@@ -111,6 +111,7 @@ class PlotProbes(object):
         self.station_lambda = lambda station_list: station_list[0:1000]
         self.plot_space = "physical"
         self.injected_turn = []
+        self.verbose_stations = [0, 1]
         self.set_plot_limits(probe)
 
     def setup_stations(self, file_name_globs):
@@ -136,8 +137,9 @@ class PlotProbes(object):
             self.load_closed_orbits(co_params)
         self.stations = {}
         for hit_list in self.probe_data.last:
+            #print("HITLIST LENGTH", len(hit_list))
             for hit in hit_list:
-                print("Add station", hit["station"])
+                #print("Add station", hit["station"])
                 if self.station_by_tof:
                     hit["station"] = int(hit["t"]/self.ring_tof)
                 if hit["station"] not in self.stations:
@@ -164,6 +166,7 @@ class PlotProbes(object):
     def get_ref_tm(self, this_station, hit = None):
         #this_station = hit["station"]
         try:
+            raise KeyError("Force station") # in 4-fold lattice we just want to use ring tm, cell tm doesn't make sense
             ref = self.ref_dict[this_station]
             tm = self.tm_dict[this_station]
         except KeyError:
@@ -186,7 +189,7 @@ class PlotProbes(object):
         station_hit_list, station_not_list = [], []
         self.cut_list_1.append(Cut("station", station, operator.ne))
         n_cuts = 0
-        for hit_list in hit_list_of_lists:
+        for i, hit_list in enumerate(hit_list_of_lists):
             for hit in hit_list:
                 this_station = int(hit["t"]/self.ring_tof) #hit["station"]
                 #print("Testing hit with t", hit["t"], "station", this_station, "vs", station)
@@ -199,18 +202,22 @@ class PlotProbes(object):
                 action_angle[1] *= hit["p"]/hit["mass"]
                 action_angle[3] *= hit["p"]/hit["mass"]
                 coupled = [hit[var] for var in self.var_list]
+                if station in self.verbose_stations and i == 0:
+                    print("For station", station)
+                    print("  TM M:\n", tm.m)
+                    print("  Ref psv:", [format(ref[var], "8.6f") for var in self.var_list])
+                if station in self.verbose_stations and i < 3:
+                    print(f"  Hit {i} psv:", [format(ref[var], "8.6f") for var in self.var_list],
+                          "Delta psv:\n", [hit[var]-ref[var] for var in self.var_list])
                 if self.will_cut_1(hit, decoupled, action_angle, hit_list[0]):
                     n_cuts += 1                   
                     continue
                 time = hit["t"]/self.ring_tof
                 time = (time-0.25 - math.floor(time-0.25))*self.ring_tof
                 energy = hit["kinetic_energy"]
-                if station == 0:
+                if station == 0 and hit["event_number"] < 3:
                     print("Energy at st1, ev", hit["event_number"], hit["kinetic_energy"], "time", hit["t"])
-                #print("Reference", ref["p"], "**", ref["px"], ref["py"], ref["pz"], "@@", hit["p"], "**", hit["px"], hit["py"], hit["pz"])
                 energy = (hit["p"]-ref["p"])/ref["p"]
-                #if hit["station"]  < 10:
-                #    print("  Longitudinal", hit["t"], time, energy)
                 if self.will_cut_2(hit, decoupled, action_angle, hit_list[0]):
                     station_not_list.append([this_station]+coupled+decoupled+action_angle+[time, energy]+[hit[e] for e in self.extras]+[ref["y"]])
                 else:
@@ -267,7 +274,7 @@ class PlotProbes(object):
         for station in station_list:
             h_list, n_list = self.get_hits(station)
             ref, tm = self.get_ref_tm(station)
-            print("Plotting", len(h_list), len(n_list)) #, len([h for h in h_list if h["x"] > 4000.0]))
+            print("\rPlotting", len(h_list), "hits and", len(n_list), "misses for station", station, "in", self.plot_space, "coordinates", end="")#, max([h[10]+h[12] for h in h_list]))
             if len(self.colour_dict) == 0:
                 # marker size should be appropriate to the station with most hits
                 max_points = max(self.stations.values())
@@ -277,12 +284,8 @@ class PlotProbes(object):
                 #continue
             z_axis = None
             xlim, ylim = None, None
-            if len(n_list):
-                self.max_amp.append(min([n[10]+n[12] for n in n_list]))
-            elif len(h_list):
-                self.max_amp.append(max([h[10]+h[12] for h in h_list]))
-            else:
-                self.max_amp.append(0)
+            if len(h_list):
+                self.max_amp += [h[1] for h in h_list]
             self.n_survive.append(len(h_list))
             if not self.do_individual_plots:
                 continue
@@ -317,40 +320,41 @@ class PlotProbes(object):
                                 +str(len(hit_list)+len(not_list))+" good hits and "+str(self.n_events)+" total injected"
                 if self.do_suptitle:
                     figure.suptitle(suptitle)
-                figure.savefig(self.plot_dir+"/transverse_station-"+name+station_str+".png")
+                figure.savefig(self.plot_dir+f"/transverse_station-{self.plot_space}_"+name+station_str+".png")
                 self.fig_list.append(figure)
                 if station != 0:
                     matplotlib.pyplot.close(figure)
-                figure = matplotlib.pyplot.figure(figsize=(10, 6))
-                if self.do_suptitle:
-                    figure.suptitle(suptitle)
-                axes = figure.add_subplot(1, 1, 1,  position=[0.15, 0.2, 0.3, 0.7])
-                self.plot_phase_space(axes, hit_list, not_list, 13, 14, z_axis, station)
-                axes = figure.add_subplot(1, 1, 1,  position=[0.6, 0.2, 0.3, 0.3])
-                self.plot_phase_space(axes, hit_list, not_list, 1, 14, z_axis, station)
-                axes.plot(axes.get_ylim(), axes.get_ylim())
-                axes = figure.add_subplot(1, 1, 1,  position=[0.6, 0.6, 0.3, 0.3])
-                self.plot_phase_space(axes, hit_list, not_list, 3, 14, z_axis, station)
-                axes.plot(axes.get_ylim(), axes.get_ylim())
-                figure.savefig(self.plot_dir+"/longitudinal_station-"+name+station_str+".png")
-                self.fig_list.append(figure)
-                matplotlib.pyplot.close(figure)
+                if self.plot_space == "longitudinal":
+                    figure = matplotlib.pyplot.figure(figsize=(10, 6))
+                    if self.do_suptitle:
+                        figure.suptitle(suptitle)
+                    axes = figure.add_subplot(1, 1, 1,  position=[0.15, 0.2, 0.3, 0.7])
+                    self.plot_phase_space(axes, hit_list, not_list, 13, 14, z_axis, station)
+                    axes = figure.add_subplot(1, 1, 1,  position=[0.6, 0.2, 0.3, 0.3])
+                    self.plot_phase_space(axes, hit_list, not_list, 1, 14, z_axis, station)
+                    axes.plot(axes.get_ylim(), axes.get_ylim())
+                    axes = figure.add_subplot(1, 1, 1,  position=[0.6, 0.6, 0.3, 0.3])
+                    self.plot_phase_space(axes, hit_list, not_list, 3, 14, z_axis, station)
+                    axes.plot(axes.get_ylim(), axes.get_ylim())
+                    figure.savefig(self.plot_dir+"/longitudinal_station-"+name+station_str+".png")
+                    self.fig_list.append(figure)
+                    matplotlib.pyplot.close(figure)
 
 
     def set_plot_limits(self, probe):
         self.lim_dict = {
-            1:[4100, 4200],
-            2:[0.050, 0.250],
-            3:[-50, 50],
-            4:[-0.05, 0.05],
+            1:[3500, 3700],
+            2:[-0.00, 0.20],
+            3:[-100, 100],
+            4:[-0.100, 0.100],
             5:[-70, 70],
             6:[-0.01, 0.01],
             7:[-100, 100],
             8:[-0.01, 0.01],
             9:[-math.pi, math.pi],
-            10:[-0.0001, 0.03],
+            10:[-0.0001, 0.21],
             11:[-math.pi, math.pi],
-            12:[-0.0001, 0.03],
+            12:[-0.0001, 0.21],
             13:[-100.0, self.ring_tof+100.0],
             14:[-0.040, 0.040],
         }
@@ -492,34 +496,49 @@ class PlotProbes(object):
             print("Longitudinal movie failed")
         os.chdir(here)
 
+def get_rf_frequency(dir_name):
+    ring_tof = 1.10591
+    freq = dir_name.split("rf_freq=")[1]
+    freq = freq.split("_")[0]
+    freq = float(freq)
+    return freq*ring_tof
+
+def get_dphi(dir_name):
+    phi = dir_name.split("rf_dphi=")[1]
+    phi = phi.split("/")[0]
+    phi = float(phi)
+    return phi
+
+def get_dummy(dir_name):
+    return 0
 
 def main(cut_station):
     DecoupledTransferMatrix.det_tolerance = 1.0
-    #glob_dir = "output/arctan_baseline/single_turn_injection/tracking_simulation_ref-only-hor/26-mm/rf-and-foil"
-    #amp_dir = "output/2022-03-01_baseline/correlated_painting/bump_quest_v16"
-    #glob_dir = amp_dir+"/track_bump_th_090_r0_-*/track_beam/da"
-    co_dir = "output/2022-07-01_baseline/bump_quest_v11/track_bump_r0=-000_by=0.00_k=8.0095"
-    amp_dir = "output/2022-07-01_baseline/bump_quest_v11/track_bump_r0=-000_by=0.00_k=8.0095"
-    glob_dir = amp_dir+"/track_beam/da/"
-    #glob_dir = "output/2022-03-01_baseline/baseline/track_beam/forwards"
-    #glob_dir = "output/2022-03-01_baseline/correlated_painting/tracking/track_beam/grid"
+    amp_dir = "output/2023-03-01_baseline/find_bump_v17/"
+    glob_dir = f"{amp_dir}/bump=-50.0_by=0.2_bumpp=-0.09/track_beam/da/"
+    ####### max_amp plot setup
+    get_delta = get_dummy
+    x_label = "(RF frequency)*(ring tof)"
+    max_amp_var = 1
+    y_label = "Radius [mm]"
+    fname = "radius_vs_frequency"
     delta = []
     max_amp = []
+    ########
     n_survive = []
     print("Plotting probes for")
     do_individual_plots = True
     for a_dir in sorted(glob.glob(glob_dir)):
         print("   ", a_dir)
     for a_dir in sorted(glob.glob(glob_dir)):
-        #a_dir = "output/arctan_baseline/baseline_test_rf_2/track_beam_rf_on"
-        for probe in ["RINGPROBE01"]:
+        for probe in ["ring_probe_001"]:
             plot_dir = a_dir+"/plot_probe_phase/"+probe
             if do_individual_plots:
                 if os.path.exists(plot_dir):
                     shutil.rmtree(plot_dir)
                 os.makedirs(plot_dir)
-            #for_glob_name = a_dir+"/RINGPROBE0"+str(probe)+".h5"
             for_glob_name = a_dir+"/"+str(probe)+".h5"
+            print("Searching in", for_glob_name)
             forwards_file_name_list = glob.glob(for_glob_name)
             plotter = PlotProbes(forwards_file_name_list, probe, plot_dir)
             plotter.station_lambda = lambda station_list: station_list
@@ -527,7 +546,7 @@ def main(cut_station):
             plotter.m_index = 0.0
             plotter.do_individual_plots = do_individual_plots
             plotter.co_param_list = [{
-                "filename":os.path.join(co_dir.replace("track", "find"), "closed_orbits_cache"),
+                "filename":"output/2023-03-01_baseline/baseline/closed_orbits_cache",
                 "ref_to_bump_station_mapping":dict([(i,i) for i in range(1001)]),
             },]
             try:
@@ -535,42 +554,39 @@ def main(cut_station):
             except IOError:
                 print("IOError trying", for_glob_name)
                 raise
-            #plotter.stations = set([0])
             cut_hits = plotter.get_hits(cut_station)[0]
             plotter.cut_list_1.append(Cut("pz", 0., operator.lt))
             plotter.cut_list_2.append(TransmissionCut(cut_hits))
-            # events that fail cut_list_1 are not plotted at all
-            #plotter.cut_list_1.append(Cut("au", 0.5, operator.gt))
-            #plotter.cut_list_1.append(Cut("av", 0.5, operator.gt))
-            # events that fail cut_list_2 are put in the "not" list and plotted as hollow dots
-            #plotter.cut_list_2.append(Cut2(10, 0.20, operator.gt, cut_hits))
-            #plotter.cut_list_2.append(Cut2(12, 0.20, operator.gt, cut_hits))
-            #plotter.title_text_1 = "Cut at turn "+str(cut_station)
+            plotter.plot_phase_spaces()
+            plotter.plot_space = "action_angle"
             plotter.plot_phase_spaces()
             if do_individual_plots:
                 plotter.movie()
-            if probe == "1":
-                delta.append(float(a_dir.split("r0_")[1].split("/")[0]))
-                max_amp.append(plotter.max_amp[0])
-                if len(plotter.n_survive) > cut_station:
-                    n_survive.append(plotter.n_survive[cut_station])
-                else:
-                    n_survive.append(0)
-    return
+            h_tune = 0.413336285851698
+            v_tune = 0.3879534802467336
+            my_delta = get_delta(a_dir)
+            delta += [float(my_delta) for a in plotter.max_amp]
+            max_amp += [float(a) for a in plotter.max_amp]
+            print(f"Wrote images to {plotter.plot_dir}")
     figure = matplotlib.pyplot.figure(figsize=(20,10))
     axes = figure.add_subplot(1, 2, 1)
-    axes.semilogy(delta, max_amp)
-    axes.set_title("Initial A$_{4d}$ of lowest amplitude particle that does not pass cuts")
-    axes.set_xlabel("nominal bump [mm]")
-    axes.set_ylabel("Norm. A$_{4d}$ [mm]")
-    axes = figure.add_subplot(1, 2, 2)
-    axes.plot(delta, n_survive)
-    axes.set_title("Number surviving to turn "+str(cut_station))
-    axes.set_xlabel("nominal bump [mm]")
-    axes.set_ylabel("Number surviving")
-    figure.savefig(amp_dir+"/amplitude_vs_bump.png")
+    axes.scatter(delta, max_amp)
+    ylim = axes.get_ylim()
+    axes.plot([h_tune, h_tune], ylim, linestyle=':', color='b')
+    axes.plot([v_tune, v_tune], ylim, linestyle=':', color='g')
+    #axes.plot([1-h_tune, 1-h_tune], ylim, linestyle='--', color='b')
+    #axes.plot([1-v_tune, 1-v_tune], ylim, linestyle='--', color='g')
+    #axes.plot([2*h_tune, 2*h_tune], ylim, linestyle='-.', color='b')
+    #axes.plot([3*h_tune-1, 3*h_tune-1], ylim, linestyle='-.', color='b')
+    axes.set_ylim(-0.05, 1.05)
+    axes.set_ylim(ylim)
+    axes.set_title(f"{y_label} over about 100 turns")
+    axes.set_xlabel(x_label)
+    axes.set_ylabel(y_label)
+    figure.savefig(f"{amp_dir}/{fname}.png")
+    print()
 
 if __name__ == "__main__":
-    main(cut_station=25)
+    main(cut_station=100)
     matplotlib.pyplot.show(block=False)
     #input("Done")

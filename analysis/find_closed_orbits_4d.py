@@ -55,7 +55,10 @@ class ClosedOrbitFinder4D(object):
         hit["t"] = t
         for i, var in enumerate(self.var_list):
             hit[var] = seed[i]
-        hit.mass_shell_condition("pz") # adjust pz so E^2 = p^2 + m^2
+        if "x'" in self.var_list:
+            hit.mass_shell_condition("p") # adjust pz so E^2 = p^2 + m^2, keeping px/pz constant
+        else:
+            hit.mass_shell_condition("pz") # adjust pz so E^2 = p^2 + m^2, keeping px constant
         v_list = ["px", "py", "pz", "x'", "y'"]
         ref = utilities.reference(self.config, self.energy)
         return hit
@@ -84,7 +87,7 @@ class ClosedOrbitFinder4D(object):
 
     def track_many(self, seed_list, t, final_subs):
         overrides = self.config_co["subs_overrides"]
-        if final_subs:
+        if final_subs and self.config_co[final_subs]:
             overrides = self.config_co[final_subs]
         overrides["__n_particles__"] = len(seed_list)+1
         hit_list = []
@@ -268,10 +271,10 @@ class ClosedOrbitFinder4D(object):
         if max_iter == 0:
             return {
                 "seed":seeds,
-                "tm":[[0., 0., 1., 0., 0., 0.],
-                      [0., 0., 0., 1., 0., 0.],
-                      [0., 0., 0., 0., 1., 0.],
-                      [0., 0., 0., 0., 0., 1.]],
+                "tm":[[0., 1., 0., 0., 0.],
+                      [0., 0., 1., 0., 0.],
+                      [0., 0., 0., 1., 0.],
+                      [0., 0., 0., 0., 1.]],
                 "substitutions":utilities.do_lattice(self.config,
                                                      self.subs,
                                                      self.config_co["subs_overrides"],
@@ -402,7 +405,10 @@ class ClosedOrbitFinder4D(object):
                     output["tm_list"] = [self.fit_matrix_2(tm_list_of_lists[0], tm_list) for tm_list in tm_list_of_lists]
                     self.print_ref_track(a_track, output["seed"], None)
                     self.track_many([], 0.0, "plotting_subs")
-                    dm = self.get_decoupled(output["tm_list"][1])
+                    tm = self.fit_matrix_2(
+                        tm_list_of_lists[self.config_co["us_cell"]],
+                        tm_list_of_lists[self.config_co["ds_cell"]])
+                    dm = self.get_decoupled(tm)
                     print("Closing with TM:")
                     self.print_dm(dm)
                 except Exception:
@@ -489,6 +495,7 @@ class ClosedOrbitFinder4D(object):
                     raise
                 else:
                     score.value = max(self.minuit_score_list)*10
+                value_list = [1e9, 1e9, 1e9, 1e9]
             delta = numpy.std(value_list)
             score.value += delta/self.opt_errs[var]
             print(var.ljust(4), format(delta, "14.10g"), end=" ")

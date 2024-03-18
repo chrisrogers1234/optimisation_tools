@@ -24,8 +24,8 @@ class PlotG4BL(object):
         self.plot_dir = plot_dir
         self.co_data = []
         self.min_n_cells = 90
-        self.target_p = 20
-        self.max_p = 21
+        self.target_p = 200
+        self.max_p = 210
         utilities.clear_dir(plot_dir)
         self.load_data(run_dir_glob, co_file, reference_file, reference_file_format)
         self.color_lambda = lambda data: data["bunch_list"][0][0]["p"]
@@ -106,6 +106,7 @@ class PlotG4BL(object):
             data["amp0"] = []
             dz = bunch_list[0][2]["z"] - bunch_list[0][0]["z"]
             data["var"] = self.get_ellipse(bunch_list[4]).tolist()
+            print("process data", i, len(bunch_list))
             for bunch in bunch_list[:]:
                 x0 = bunch[0]["x"]
                 fft_input_data = [hit["x"] for hit in bunch[::2]]
@@ -134,11 +135,9 @@ class PlotG4BL(object):
         self.figure1 = matplotlib.pyplot.figure()
         axes1 = self.figure1.add_subplot(1, 2, 1)
         axes2 = self.figure1.add_subplot(1, 2, 2)
-        #axes3 = self.figure1.add_subplot(2, 2, 3)
         p0 = round(data["p_list"][0], 1)
         x0_list = [data["x_init_list"][j] for j, nu_list in 
                         enumerate(data["fft_detail_nu_list"]) if data["max_cell"][j] >  self.min_n_cells]
-
         colors = matplotlib.pyplot.cm.coolwarm
         norm = matplotlib.colors.Normalize(min(x0_list), max(x0_list))
         mappable = matplotlib.cm.ScalarMappable(norm, colors)
@@ -172,6 +171,8 @@ class PlotG4BL(object):
         return y
 
     def fit(self, x_data, y_data):
+        if not y_data:
+            return [0.0, 0.0], None
         aguess = y_data[0], 0
         x_data = [x for x in x_data if x < 30]
         y_data = [y for i, y in enumerate(y_data) if i < len(x_data)]
@@ -261,8 +262,8 @@ class PlotG4BL(object):
     beta_limit = 1e4
 
 def main():
-    run_dir = "output/musr_cooling_v1/"
-    run_dir_glob = sorted(reversed([run_dir+"scale=*_pz=*/"]))#, run_dir+"by=0.2_pz=200_r0=*/", run_dir+"by=0.2_pz=220_r0=*/"]
+    run_dir = "output/rectilinear_cooling_v16/"
+    run_dir_glob = sorted(reversed([run_dir+"scale=*_pz=200*/"]))#, run_dir+"by=0.2_pz=200_r0=*/", run_dir+"by=0.2_pz=220_r0=*/"]
     plot_dir = run_dir+"/plot_momentum_2/"
 
     #run_dir_glob = [run_dir+"by=0.05_pz=?00/", run_dir+"by=0.05_pz=60/"]
@@ -273,6 +274,7 @@ def main():
     plotter = PlotG4BL(run_dir_glob, co_file_name, file_name, file_format, plot_dir, 1e9)
     plotter.beta_limit = 1e4
     plotter.max_p = 171
+    plotter.min_n_cells = 90
     plotter.color_lambda = lambda data: data["subs"]["__octupole_coefficient__"]
     plotter.color_lambda = lambda data: data["subs"]["__momentum__"]
     plotter.color_lambda = lambda data: data["subs"]["__cell_length__"]

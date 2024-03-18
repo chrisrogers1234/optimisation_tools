@@ -162,6 +162,7 @@ class G4BLTracking(TrackingBase):
         return hit_list_of_lists
 
     def open_subprocess(self):
+        self.cleanup()
         command = [self.g4bl_path, self.lattice_filename]+self.flags
         log = open(self.log_filename, "w")
         proc = subprocess.Popen(command,
@@ -214,3 +215,14 @@ class G4BLTracking(TrackingBase):
                 print("Successfull parsed", n_good_lines, "/", n_lines, "lines")
         self.last = self.pass_through_analysis.finalise()
         return self.last
+
+    def cleanup(self):
+        """
+        Delete output files (prior to tracking)
+        """
+        if self.clear_path == None:
+            clear_files = self.get_name_list()
+        else:
+            clear_files = glob.glob(self.clear_path)
+        for a_file in clear_files:
+            os.unlink(a_file)

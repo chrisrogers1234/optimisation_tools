@@ -19,12 +19,15 @@ from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransfer
 DecoupledTransferMatrix.det_tolerance = 1
 
 class PlotG4BL(object):
-    def __init__(self, run_dir_glob, co_file, cell_length, reference_file, reference_file_format, plot_dir, max_score):
+    def __init__(self, run_dir_glob, co_file, cell_length, target_subs, reference_file, reference_file_format, plot_dir, max_score):
         self.plot_dir = plot_dir
         self.co_data = []
         self.cell_length = cell_length
+        self.target_subs = target_subs # list of subs
+        self.pick_list = []
         self.load_data(run_dir_glob, co_file, reference_file, reference_file_format)
         self.parse_substitutions() # check for variables and sort the list
+        self.pick_substitutions()
         self.filter_data(max_score) # if max_score, reject data with data["errors"] > max_score
         self.colors =  ["C"+str(i) for i in range(len(self.co_data))]
         utilities.clear_dir(plot_dir)
@@ -72,6 +75,23 @@ class PlotG4BL(object):
             data["variables"] = var
 
         self.co_data = sorted(self.co_data, key = self._sort_lambda)
+
+    def pick_substitutions(self):
+        self.pick_list = []
+        for i, data in enumerate(self.co_data):
+            if "substitutions" not in data:
+                continue
+            for subs in self.target_subs:
+                will_pick = True
+                for key, value in subs.items():
+                    print(key, value, data["substitutions"][key])
+                    if abs(data["substitutions"][key]-value) > 1e-3:
+                        will_pick = False
+                        break
+                if will_pick:
+                    self.pick_list.append(i)
+                    break
+
 
     def filter_data(self, max_score):
         if not max_score:
@@ -289,7 +309,8 @@ class PlotG4BL(object):
         axes1 = self.figure1.add_subplot(1, 2, 1)
         axes2 = self.figure1.add_subplot(1, 2, 2)
         z_max = self.cell_length
-        for i, data in enumerate(self.co_data):
+        plot_data = [data for i, data in enumerate(self.co_data) if i in self.pick_list]
+        for i, data in enumerate(plot_data):
             bunch_list = data["bunch_list"]
             ref_list = []
             for bunch in bunch_list:
@@ -327,6 +348,7 @@ class PlotG4BL(object):
                     axes2.set_title("Max B$_z$: "+str(round(max_bz/tesla, 3))+" T")#; Mean B$_{z}^2$ "+str(round(mean_bz2/tesla, 3))+"T$^2$")
                 else:
                     axes2.plot(z_list, b_list[var], linestyle=linestyle, c=c)
+        print("PICK LIST", self.pick_list)
         axes1.tick_params(labelsize = self.l_size)
 
         axes1.set_xlabel("z [mm]", fontsize=self.f_size)
@@ -439,7 +461,7 @@ class PlotG4BL(object):
 
     key_subs = {
             "__coil_radius__":"r0",
-            "__dipole_field__":"B$_{y}$",
+            "__dipole_by__":"B$_{y}$",
             "__n_particles__":None,
             "__solenoid_field__":None,
             "__optimisation_iteration__":None,
@@ -451,14 +473,14 @@ class PlotG4BL(object):
     }
     units_subs = {
             "__coil_radius__":"[mm]",
-            "__dipole_field__":"[T]",
+            "__dipole_by__":"[T]",
             "__momentum__":"[MeV/c]",
             "__wedge_opening_angle__":"$^\\circ$",
             "__energy__":"",
     }
     short_form = {
         "__coil_radius__":"r0",
-        "__dipole_field__":"by",
+        "__dipole_by__":"by",
         "__momentum__":"ptot",
         "__energy__":None,
     }
@@ -472,18 +494,19 @@ class PlotG4BL(object):
     f_size = 20
 
 def main():
-    run_dir = "output/musr_cooling_v4/"
-    dp_str = "ppmm"
-    run_dir_glob = [run_dir+"/pz=*_dp="+dp_str+"_*orbit",]
+    run_dir = "output/ruihu_cooling_v4/"
+    dp_str = "pmmp"
+    run_dir_glob = [f"{run_dir}/stage1_dp={dp_str}_pz=*",]
     plot_dir = run_dir+"/"+dp_str+"_plots/"
+    target_pz = [{"__momentum__":mom} for mom in [0.19, 0.200, 0.210]]
 
     #run_dir_glob = [run_dir+"by=0.05_pz=?00/", run_dir+"by=0.05_pz=60/"]
     #plot_dir = run_dir+"/scan_plots_momentum_restricted/"
     file_name = "tmp/find_closed_orbits/output*.txt"
     co_file_name = "closed_orbits_cache"
-    cell_length = 2000.0 # full cell length
+    cell_length = 4600.0 # full cell length
     file_format = "icool_for009"
-    plotter = PlotG4BL(run_dir_glob, co_file_name, cell_length, file_name, file_format, plot_dir, 1e9)
+    plotter = PlotG4BL(run_dir_glob, co_file_name, cell_length, target_pz, file_name, file_format, plot_dir, 1e9)
     plotter.beta_limit = 1e3
     plotter.do_plots()
 

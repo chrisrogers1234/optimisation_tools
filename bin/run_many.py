@@ -15,6 +15,7 @@ UNIQUE_ID = 0
 N_PROCS = 11
 TARGET_SCRIPT = "run_many_"
 TIME_0 = time.time()
+LOG_DIR = "logs"
 
 def do_at_exit():
     proc_queue = poll()
@@ -35,8 +36,20 @@ def will_make_new_procs(temp_proc_queue):
     global PROC_QUEUE, N_PROCS
     return len(temp_proc_queue) < N_PROCS and len(PROC_QUEUE) > 0
 
+def archive_logs():
+    old_dir = os.path.join(LOG_DIR, "old")
+    if not os.path.isdir(old_dir):
+        print(f"{old_dir} is not a directory; not archiving log files")
+        return
+    log_list = glob.glob(os.path.join(f"{LOG_DIR}", "*.log"))
+    print(f"Archiving {len(log_list)} log files to {old_dir}")
+    for fname in log_list:
+        new_name = os.path.split(fname)[1]
+        new_name = os.path.join(old_dir, new_name)
+        os.rename(fname, new_name)
+
 def poll_process_queue():
-    global UNIQUE_ID, PROC_RUNNING, PROC_QUEUE, TIME
+    global UNIQUE_ID, PROC_RUNNING, PROC_QUEUE, TIME, LOG_DIR
     print("\r", round(time.time()-TIME_0, 1), "...",
           "Running", len(PROC_RUNNING), 
           "with", len(PROC_QUEUE), "queued", end=" ")
@@ -46,7 +59,7 @@ def poll_process_queue():
     while will_make_new_procs(temp_proc_queue):
         subproc_args, logname = PROC_QUEUE.pop(0)
         UNIQUE_ID += 1
-        job_log = "logs/"+logname+".log"
+        job_log = LOG_DIR+"/"+logname+".log"
         job_name = f"run_many_{UNIQUE_ID}"
         if is_scarf():
             subproc_args = ["salloc", "--job-name", job_name, "-N1", "srun", "-n1", "-t5", "-o", job_log, "-e", job_log, "--job-name", job_name]+subproc_args
@@ -109,6 +122,7 @@ def load_configs():
 
 def main(config_file):
     atexit.register(do_at_exit)
+    archive_logs()
     configs = load_configs()
     if os.getenv("OPAL_EXE_PATH") == None:
         raise ValueError("No OPAL_EXE_PATH set")

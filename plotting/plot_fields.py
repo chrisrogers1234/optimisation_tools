@@ -20,83 +20,94 @@ import optimisation_tools.plotting.plot as plot
 #import pyopal.objects.track_run
 
 def pybase():
-    base_dir = "output/2022-12-01_baseline/baseline/"
-    run_dir = "tmp/find_closed_orbits"
-    name = "pybase"
+    base_dir = "output/2023-03-01_baseline/find_bump_v14/"
+    run_dir = "plotter"
+    name = "fields_base"
     orbit_folder_list = glob.glob(os.path.join(base_dir, "tmp/find_closed_orbits"))
     plot_range = [0, 180]
     return base_dir, run_dir, orbit_folder_list, plot_range, name, "fets_ffa"
 
 def pybump():
-    by = "0.1"
-    base_dir = "/home/cr67/work/2017-07-07_isis2/horizontal_isis3/output/2023-03-01_baseline/find_bump_v4/"
-    orbit_dir_glob = f"{base_dir}/bump=*_by={by}/"
-    run_dir = f"{base_dir}/bump=-200.0_by={by}/tmp/find_bump"
-    name = f"pybase_by={by}"
+    by = "0.2"
+    bumpp = "0.0"
+    dx = "-50.0" # only for the field plots
+    base_dir = "/home/cr67/work/2017-07-07_isis2/horizontal_isis3/output/2023-03-01_baseline/find_bump_v17/"
+    orbit_dir_glob = f"{base_dir}/bump={dx}_by={by}*bumpp=*/"
+    run_dir = f"{base_dir}/bump=-50.0_by={by}_bumpp={bumpp}/tmp/find_bump"
+    name = f"fields_bump={dx}_by={by}"
     orbit_folder_list = sorted(glob.glob(os.path.join(orbit_dir_glob, "tmp/find_bump")))
-    plot_range = [0, 180]
+    plot_range = [45, 135]
     return base_dir, run_dir, orbit_folder_list, plot_range, name, "fets_ffa"
 
+def pytrack():
+    by = "0.1"
+    bumpp = "-0.1"
+    dx = "-50.0" # only for the field plots
+    base_dir = "/home/cr67/work/2017-07-07_isis2/horizontal_isis3/output/2023-03-01_baseline/find_bump_v17/"
+    orbit_dir_glob = f"{base_dir}/bump=*_by={by}*bumpp={bumpp}/"
+    injection_dir = f"{base_dir}/bump={dx}_by={by}*bumpp={bumpp}/"
+    run_dir = f"{base_dir}/bump={dx}_by={by}_bumpp={bumpp}/track_beam/reference"
+    name = f"fields_track_by={by}"
+    orbit_folder_list = sorted(glob.glob(os.path.join(orbit_dir_glob, "track_beam/reference")))
+    orbit_folder_list += [os.path.join(injection_dir, "track_beam/injection")]
+    plot_range = [45, 135]
+    return base_dir, run_dir, orbit_folder_list, plot_range, name, "fets_ffa"
 
-def closed_orbits_k_vary():
-    base_dir = "output/2022-07-01_baseline/bump_quest_v8/"
-    by = "by=0.00"
-    name = "closed_orbits"
-    run_dir = name+"_k=6.1/tmp/find_closed_orbits_3.0"
-    orbit_folder_list = glob.glob(base_dir+name+"_k=*/tmp/find_closed_orbits_*")
-    plot_range = [0, 180]
-    return base_dir, run_dir, orbit_folder_list, plot_range, name, "FETS_Ring"
+def injection():
+    by = "0.1"
+    bumpp = "-0.05"
+    dx1 = "-30.0"
+    dx2 = "-20.0"
 
-def find_bump():
-    base_dir = "output/2022-07-01_baseline/bump_quest_v10/"
-    by = "by=0.10"
-    name = "find_bump"
-    run_dir = name+"_r0=-000_"+by+"_k=8.0095/tmp/find_bump"
-    orbit_folder_list = glob.glob(base_dir+name+"_r0=-*_"+by+"_k=8.0095/tmp/find_bump")
-    plot_range = [0, 180]
-    return base_dir, run_dir, orbit_folder_list, plot_range, name, "FETS_Ring"
+    base_dir = "/home/cr67/work/2017-07-07_isis2/horizontal_isis3/output/2023-03-01_baseline/find_bump_v17/"
+    run_dir = f"{base_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_bump_full/plotting"
 
-def track_bump():
-    base_dir = "output/2022-07-01_baseline/bump_quest_v10/"
-    by = "by=0.00"
-    a_dir = "track_bump_r0=-*_"+by+"_k=8.0095/"
-    inj_dir = "track_bump_r0=-100_"+by+"_k=8.0095/"
-    run_dir = inj_dir+"/track_beam/reference"
-    off_ref_dir = "output/2022-07-01_baseline/bump_quest_v8/closed_orbits_k=6.1/tmp/find_closed_orbits_3.0"
-    orbit_folder_list = glob.glob(base_dir+a_dir+"/track_beam/reference")+\
-                        glob.glob(base_dir+inj_dir+"/track_beam/injection")+\
-                        [off_ref_dir]
-    print(orbit_folder_list)
-    plot_range = [0, 180]
-    return base_dir, run_dir, orbit_folder_list, plot_range, "track_bump_"+by, "FETS_Ring"
+    orbit_folder_list = [
+        f"{base_dir}/bump=-0.0_by=0.0_bumpp=0.0/tmp/find_closed_orbits",
+        f"{base_dir}/bump={dx2}_by={by}_bumpp={bumpp}/track_beam/reference",
+        f"{base_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_beam/reference",
+        f"{base_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_bump_full/injection",
+    ]
+    name = f"injection_zoom_out_track_by={by}"
 
-def track_ffynchrotron_folders():
-    a_dir = "output/muon_ffynchrotron/baseline/"
-    base_dir = a_dir+""
-    run_dir = "tmp/find_closed_orbits"
-    orbit_folder_list = glob.glob(a_dir+"/"+run_dir)
-    plot_range = [13, 17]
-    return base_dir, run_dir, orbit_folder_list, plot_range, "ffynchrotron_bump_co", "Ffynchrotron"
+    plot_range = [45, 135]
+    return base_dir, run_dir, orbit_folder_list, plot_range, name, "fets_ffa"
 
-def find_ffynchrotron_folders():
-    a_dir = "output/muon_ffynchrotron/bump_quest_v15/"
-    base_dir = a_dir+"energy=800/"
-    run_dir = "tmp/find_bump"
-    orbit_folder_list = glob.glob(a_dir+"energy=*/"+run_dir)
-    plot_range = [90, 150]
-    return base_dir, run_dir, orbit_folder_list, plot_range, "ffynchrotron_bump_co", "Ffynchrotron"
+def generate_name(folder):
+    fname = folder.split("/")[-2]
+    fname = fname.replace("_", " ")
+    return fname
 
-def generate_name(orbit_folder):
-    return ""
-    orbit_folder = orbit_folder.split("_k=")[1]
-    orbit_folder = orbit_folder.split("/")[0]
-    return "k="+orbit_folder
+def hardcoded_contours():
+    df = 16/2/math.pi
+    phi_cell_list = [11.0472, 20.0472,  32.8310, 41.8310,  48.1690, 57.1690,  69.9528, 78.9528]
+    phi0_list = []
+    for i in range(4):
+        phi0_list += [phi+i*90 for phi in phi_cell_list]
+    angle = 30
+    r0 = 3.6
+    contour_list = [{
+            "phi0":phi, "r0":r0, "spiral_angle":angle, "linestyle":"--", "colour":"grey", "label":""
+        } for phi in phi0_list]
+    phi_mag_list = []
+    mag_length = 10+2.13*2+0.05*2/(2*math.pi*3.6)*360
+    print("MAG LENGTH", mag_length, "degree")
+    for i, phi0 in enumerate(phi0_list[::2]):
+        phi_mean = (phi0_list[2*i]+phi0_list[2*i+1])/2
+        print(phi_mean)
+        cont = {
+            "phi0":phi_mean-mag_length/2, "phi1":phi_mean+mag_length/2, "r0":r0, "spiral_angle":angle, "linestyle":"--", "colour":"grey", "label":"", "alpha":0.1,
+        }
+        contour_list.append(cont)
+        contour_list.append(cont)
+
+    return contour_list
 
 def plot_azimuthal():
-    base_dir, run_dir, orbit_folder_list, plot_range, job_name, lattice_name = pybump()
-    r0 = 4.0
-    orbit_folder_list = [(o, generate_name(o)) for o in orbit_folder_list]
-    probe_files = "*foil*probe*.h5" #"FOILPROBE_1.h5" #
+    base_dir, run_dir, orbit_folder_list, plot_range, job_name, lattice_name = injection()
+    r0 = 3.6 # I think this is just used for calculating s
+    orbit_folder_list = [(o, "") for o in orbit_folder_list]
+    probe_files = "*ring*probe*5.h5" #"FOILPROBE_1.h5" #
     track_files = "*-trackOrbit*dat"
     lattice_file = os.path.join(base_dir, run_dir+"/run_"+lattice_name+".py")
     angle_domain = [0.0, 360.0]
@@ -104,7 +115,7 @@ def plot_azimuthal():
     disallowed_events = ["ID0"]
     plot.LoadOrbit.azimuthal_domain = angle_domain
     plot.LoadH5.azimuthal_domain = angle_domain
-    test_function = lambda words: words[1]**2+words[3]**2 > (4.4)**2# or words[1]**2+words[3]**2 < (3.5)**2
+    test_function = lambda words: words[1]**2+words[3]**2 > (4.0)**2 or words[1]**2+words[3]**2 < (3.2)**2
     orbit_list = []
     for orbit_folder, name in orbit_folder_list:
         h5 = plot.LoadH5(os.path.join(orbit_folder, probe_files))
@@ -120,12 +131,12 @@ def plot_azimuthal():
         orbit_list[-1].r0 = r0
         print("Loaded", orbit_file)
     if not len(orbit_list):
-        raise RuntimeError("Could not find any orbit files", orbit_file)
+        raise RuntimeError("Could not find any orbit files", orbit_folder_list)
     print("BASE_DIR", base_dir, "LATTICE FILE", lattice_file)
     plot_fields = plot.PlotFields(plot.GetFields(lattice_file), orbit_list)
-    #[print([plot_orbit.orbit.orbit[var][0] for var in ["px", "py", "pz"]]) for plot_orbit in orbit_list]
+    plot_fields.spiral_contours = hardcoded_contours()
     plot_fields.azimuthal_field_plot = ["bz", "div_b", "curl_b"]
-    figure = plot_fields.azimuthal_fig("bump", plot_range)
+    figure = plot_fields.azimuthal_fig("bump", plot_range, do_field_plot = True)
     for axes in figure.axes:
         if "$r_0\\phi$" in axes.get_xlabel():
             continue
@@ -154,7 +165,7 @@ def plot_beam():
     #log_file.print()
     for orbit_folder, name in orbit_folder_list:
         h5 = plot.LoadH5(os.path.join(orbit_folder, probe_files))
-        orbit_file = os.path.join(orbit_folder, lattice_name+"-trackOrbit.dat")
+        orbit_file = glob.glob(os.path.join(orbit_folder, lattice_name+"-trackOrbit.dat"))[0]
         if not os.path.exists(orbit_file):
             orbit_file = os.path.join(orbit_folder, lattice_name+"-trackOrbit_1.dat")
         orbit = plot.LoadOrbit(orbit_file, allowed_events, disallowed_events, test_function)

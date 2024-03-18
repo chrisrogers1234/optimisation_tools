@@ -23,7 +23,7 @@ class QuadFinder(object):
         self.lq = data_def["l_q"] # quad length
         self.target_nu_x = data_def["nu_x"]
         self.target_nu_y = data_def["nu_y"]
-        self.tm = numpy.array(tm)        
+        self.tm = numpy.array(tm)
         self.key = data_def["key"]
         self.iteration = 0
         self.minuit = ROOT.TMinuit(2)
@@ -161,6 +161,7 @@ def hack_tune(score, data_def):
         score_out = score + 1.5
     else:
         score_out = abs(score)
+    score_out += 1.7 - 2.0 # half the ring tune is 1.7
     print(f"WARNING - HACKED TUNE {score} to {score_out}")
     return score_out
 
@@ -237,6 +238,12 @@ class PlotFindBumpParameters(object):
             if data_def["source"] == "subs":
                 key = data_def["key"]
                 plot_data.append(item["subs"][key])
+            elif data_def["source"] == "score_total":
+                print("doing score_total")
+                optimisation = data_def["optimisation_step"]-1
+                data_source = item["find_bump_parameters"][optimisation]["best"]
+                print("Found score", data_source["score"])
+                plot_data.append(data_source["score"])
             elif data_def["source"] == "parameters":
                 key = data_def["key"]
                 optimisation = data_def["optimisation_step"]-1
@@ -267,8 +274,8 @@ class PlotFindBumpParameters(object):
                             except IndexError:
                                 print("index", key, "not in item of length", len(score))
                                 raise
-                        if data_def["score_type"] == "tune":
-                            score = hack_tune(score, data_def)
+                        #if data_def["score_type"] == "tune":
+                        #    score = hack_tune(score, data_def)
                         plot_data.append(score)
                         break
             elif data_def["source"] == "transfer_matrix":
@@ -402,7 +409,7 @@ def plot_definitions_ffync():
         "cut_list":cut_list,
         "data":[{"x":x_data,
                  "y":{"source":"parameters", "optimisation_step":2, "key":"__h_bump_delta_field__"},
-               }],             
+               }],
         "file_name":"h_bump_2",
         "axis":{"x_label":"Energy [MeV]", "y_label":"D2-D1 [T]"}
     }, {
@@ -437,10 +444,23 @@ def plot_definitions_ffync():
     return definitions
 
 
-def plot_definitions_hffa(by):
+def plot_definitions_hffa(title):
     cut_list = []
-    x_data = {"source":"score", "score_type":"orbit", "station":5, "key_list":["target", 0], "optimisation_step":1}
+    x_data = {"source":"score", "score_type":"orbit", "station":5, "key_list":["target", 1], "optimisation_step":1}
+    x_label = "target r'"
     definitions = [{
+        "sort_axis":"x",
+        "cut_list":cut_list,
+        "data":[{"x":x_data,
+                 "y":{"source":"score_total", "optimisation_step":1},
+                 "label":"optimisation step 1",
+               },{"x":x_data,
+                 "y":{"source":"score_total", "optimisation_step":2},
+                 "label":"optimisation step 2",
+               },],
+        "file_name":"scores",
+        "axis":{"x_label":x_label, "y_label":"score", "grid":True, "title":title}
+    },{
         "sort_axis":"x",
         "cut_list":cut_list,
         "data":[{"x":x_data,
@@ -448,7 +468,7 @@ def plot_definitions_hffa(by):
                  "label":"$x$",
                },],
         "file_name":"position",
-        "axis":{"x_label":"target r [mm]", "y_label":"found r [mm]", "grid":True, "title":f"b$_y$ {by} T"}
+        "axis":{"x_label":x_label, "y_label":"found r [mm]", "grid":True, "title":title}
     },{
         "sort_axis":"x",
         "cut_list":cut_list,
@@ -457,7 +477,7 @@ def plot_definitions_hffa(by):
                  "label":"$x'$",
                },],
         "file_name":"angle",
-        "axis":{"x_label":"target r [mm]", "y_label":"found pr/pphi", "grid":True, "title":f"b$_y$ {by} T"}
+        "axis":{"x_label":x_label, "y_label":"found $p_r/p_{\\phi}$", "grid":True, "title":title}
     },{
         "sort_axis":"x",
         "cut_list":cut_list,
@@ -466,7 +486,7 @@ def plot_definitions_hffa(by):
                  "label":"$x$",
                },],
         "file_name":"r_co",
-        "axis":{"x_label":"target r [mm]", "y_label":"r at CO [mm]", "grid":True, "title":f"b$_y$ {by} T"}
+        "axis":{"x_label":x_label, "y_label":"r at CO [mm]", "grid":True, "title":title}
     },{
         "sort_axis":"x",
         "cut_list":cut_list,
@@ -487,24 +507,24 @@ def plot_definitions_hffa(by):
                  "label":"$B5$",
                },],
         "file_name":"fields",
-        "axis":{"x_label":"target r [mm]", "y_label":"Bump Field [T]", "title":f"b$_y$ {by} T"}
+        "axis":{"x_label":x_label, "y_label":"Bump Field [T]", "title":title}
     },{
         "sort_axis":"x",
         "cut_list":cut_list,
         "data":[{"x":x_data,
-                 "y":{"source":"score", "score_type":"tune", "station":9, "key_list":["tunes", 0], "optimisation_step":3},
+                 "y":{"source":"score", "score_type":"tune", "station":18, "key_list":["tunes", 0], "optimisation_step":3},
                  "label":"$\\nu_x$",
                }, {"x":x_data,
-                 "y":{"source":"score", "score_type":"tune", "station":9, "key_list":["tunes", 1], "optimisation_step":3},
+                 "y":{"source":"score", "score_type":"tune", "station":18, "key_list":["tunes", 1], "optimisation_step":3},
                  "label":"$\\nu_y$"
                }],
         "file_name":"tune",
-        "axis":{"x_label":"target r [mm]", "y_label":"$\\nu$", "title":f"b$_y$ {by} T", "legend":True, "horizontals":[0.0, +0.5, +1.0]}
+        "axis":{"x_label":x_label, "y_label":"$\\nu$", "title":title, "legend":True, "horizontals":[0.0, +0.5, +1.0]}
     },]
     return definitions
 
 def main_ffync():
-    run_dir = "output/muon_ffynchrotron/bump_quest_v15/"
+    run_dir = "output/muon_ffynchrotron/bump_quest_v16/"
     plot_dir = os.path.join(run_dir, "plot_find_bump_parameters")
     file_glob = os.path.join(run_dir, "energy=*/find_bump_parameters*.out")
     plotter = PlotFindBumpParameters(plot_dir, file_glob)
@@ -513,14 +533,16 @@ def main_ffync():
     plotter.do_plots()
 
 def main_hffa():
-    by = "0.0"
-    run_dir = "output/2023-03-01_baseline/find_bump_v4/"
-    plot_dir = os.path.join(run_dir, "plot_find_bump_parameters_"+by)
-    file_glob = os.path.join(run_dir, "bump=*_by="+by+"/find_bump_parameters*.out")
-    plotter = PlotFindBumpParameters(plot_dir, file_glob)
-    plotter.plot_definitions = plot_definitions_hffa(by)
-    plotter.setup()
-    plotter.do_plots()
+    by = "0.1"
+    for dx in ["-50.0", "-40.0", "-30.0", "-20.0", "-10.0", "-0.0"]:
+        bumpp = "*" # 0.0 -> stable between -20 and -50; 0.05 -> stable only at -50; -0.05 -> never stable; -0.02 stable between -30 and -50
+        run_dir = "output/2023-03-01_baseline/find_bump_v17/"
+        plot_dir = os.path.join(run_dir, f"plot_find_bump_parameters_{by}_dx_{dx}")
+        file_glob = os.path.join(run_dir, f"bump={dx}_by={by}*bumpp={bumpp}/find_bump_parameters*.out")
+        plotter = PlotFindBumpParameters(plot_dir, file_glob)
+        plotter.plot_definitions = plot_definitions_hffa(f"b$_y$ {by} T; dr {dx} mm")
+        plotter.setup()
+        plotter.do_plots()
 
 if __name__ == "__main__":
     main_hffa()

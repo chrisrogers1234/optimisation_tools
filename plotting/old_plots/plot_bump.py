@@ -343,7 +343,7 @@ class PlotBump(object):
     }
 
 def main():
-    by = "0.2"
+    by = "0.1"
     root_dir = "output/2023-03-01_baseline/find_bump_v3"
     file_list = glob.glob(root_dir+"/bump=-*by="+by+"/find_bump_*_002.out")
     plot_dir = root_dir+"/plot_bump_by="+by
@@ -362,7 +362,7 @@ def main():
     plotter.target_field = "__h_bump_2_field__"
     plotter.plot_fields(1)
     plotter.plot_fields(3)
-    return
+    #return
     #plotter.plot_phased_var_2d(1, 3, ["score", "n_iterations"])
     for probe in [1, 2, 3, 0, 4, 5, 6, 7]:
         plotter.target_probe = probe

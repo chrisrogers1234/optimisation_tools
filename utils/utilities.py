@@ -1,3 +1,4 @@
+import math
 import subprocess
 import copy
 import os
@@ -178,6 +179,7 @@ def setup_tracking_g4bl(config, outfiles, ref_energy):
     tracking.output_format = config.tracking["g4bl_output_format"]
     tracking.verbose = config.tracking["verbose"]
     tracking.flags = config.tracking["flags"]
+    tracking.clear_path = config.tracking["clear_files"]
     tracking.pass_through_analysis = StoreDataInMemory(config)
     return tracking
 
@@ -429,3 +431,55 @@ def mencode(working_directory, fin_str, fout_name):
         print("Movie failed")
     finally:
         os.chdir(here)
+
+def scale(hit_in, k, tan_delta, p_out):
+    """
+    Find a hit in the scaled coordinate system of p_out where p_out is the new total momentum
+
+    Note this is complicated because we have to apply a scale in radius and momentum but also
+    angle because the spiral angle will change for constant physical angle.
+    """
+    # following spiral_sector.pdf
+    p_in = hit_in["p"]
+    beta = p_out / p_in
+    alpha = beta**(1/(k+1))
+    hit_out = copy.deepcopy(hit_in)
+    # assume y is vertical, x and z is the plane of the FFA ring
+    hit_out["y"] = alpha*hit_in["y"]
+
+    phi_in = math.atan2(hit_in["z"], hit_in["x"])
+    phi_out = phi_in + math.log(alpha)*tan_delta
+    r_in = (hit_in["x"]**2+hit_in["z"]**2)**0.5
+    hit_out["x"] = r_in*alpha*math.cos(phi_out)
+    hit_out["z"] = r_in*alpha*math.sin(phi_out)
+
+    hit_out["p"] = beta*hit_in["p"]
+    p_in = (hit_in["px"]**2+hit_in["pz"]**2)**0.5
+    px, pz = hit_out["px"], hit_out["pz"]
+    hit_out["px"] = px*math.cos(phi_out) - pz*math.sin(phi_out)
+    hit_out["pz"] = pz*math.cos(phi_out) + px*math.sin(phi_out)
+    #hit_out["px"] = +hit_in["px"]*beta*math.cos(phi_out)-hit_in["pz"]*beta*math.sin(phi_out)
+    #hit_out["pz"] = -hit_in["px"]*beta*math.sin(phi_out)+hit_in["pz"]*beta*math.cos(phi_out)
+    hit_out.mass_shell_condition("energy")
+
+    print("scale alpha", alpha, "beta", beta)
+
+    return hit_out
+
+def scale_2(x_in, xp_in, ke_in, ke_out, k, tan_delta, pid = 2212):
+    """
+    Returns tuple of x, xp
+    """
+    hit = xboa.hit.Hit.new_from_dict({"pid":pid, "mass":xboa.common.pdg_pid_to_mass[2212], "kinetic_energy":ke_in, "x":x_in, "px":0, "py":0, "pz":0})
+    hit.mass_shell_condition("pz")
+    hit["x'"] = xp_in
+    hit.mass_shell_condition("p")
+    print(xp_in, hit["x'"])
+    print(ke_in, hit["kinetic_energy"])
+    p_out = ((hit["mass"]+ke_out)**2-hit["mass"]**2)**0.5
+    hit_out = scale(hit, k, tan_delta, p_out)
+    print(ke_out, hit_out["kinetic_energy"])
+    print(hit_out["x"], hit_out["x'"])
+    return hit_out["x"], hit_out["x'"]
+
+

@@ -29,13 +29,12 @@ class TwoDTransferMatrix(DecoupledTransferMatrix):
             v_2d = self.get_v2d(self.m[j:2+j, j:2+j])
             self.phase[i] = self.setup_phase_advance(self.m[j:2+j, j:2+j])
             self.v_t[j:2+j, j:2+j] = v_2d
-        print("VT", self.v_t, numpy.linalg.det(self.v_t))
         try:
             self.chol = numpy.linalg.cholesky(self.v_t)
             self.chol_inv = numpy.linalg.inv(self.chol)
         except numpy.linalg.LinAlgError:
             # matrix is not positive definite. Never mind, let's plug on
-            print("ERRORROROEEORO")
+            sys.excepthook(*sys.exc_info())
             self.chol = None
             self.chol_inv = None
 
@@ -58,6 +57,8 @@ class TwoDTransferMatrix(DecoupledTransferMatrix):
             raise RuntimeError("m2d was unstable with cosmu: "+str(cosmu))
         n2d = m2d - numpy.array([[cosmu, 0.0],[0.0,cosmu]])
         sinmu = numpy.linalg.det(n2d)**0.5
+        if abs(sinmu) < 1e-12:
+            return numpy.array([[1.0, 0.0], [0.0, 1.0]])
         n2d /= sinmu
         v2d = numpy.array([[n2d[0,1], -n2d[0,0]], [-n2d[0,0], -n2d[1, 0]]])
         return v2d

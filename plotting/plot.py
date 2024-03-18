@@ -25,6 +25,7 @@ import xboa.common
 
 import pyopal.objects.parser
 import pyopal.objects.field
+import pyopal.objects.ffa_field_mapper
 import optimisation_tools.utils.utilities
 from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransferMatrix
 from optimisation_tools.utils.twod_transfer_matrix import TwoDTransferMatrix
@@ -42,6 +43,7 @@ class GetFields(object):
             print("Assume this is an opal lattice, loading")
             self.hack_lattice()
             self.load_lattice()
+        self.subs = {}
 
     def hack_lattice(self):
         source = self.lattice_file
@@ -148,6 +150,15 @@ class GetFields(object):
                  "oob":oob}
         return field
 
+    def str_field(self):
+        my_string = ""
+        n_fields = pyopal.objects.field.get_number_of_elements()
+        for i in range(n_fields):
+            name = pyopal.objects.field.get_element_name(i).ljust(20)
+            start_pos = [f"{pos:.5g}" for pos in pyopal.objects.field.get_element_start_position(i)]
+            my_string += f"{name} {start_pos}\n"
+        return my_string
+
     field_vars = ["bx", "by", "bz", "btot", "br", "bphi", "ex", "ey", "ez", "etot", "er", "ephi", "oob"]
 
 class LoadLog(object):
@@ -218,12 +229,13 @@ class LoadLog(object):
 
 
 class LoadOrbit(object):
-    def __init__(self, file_name, allowed_id, disallowed_id=[], test_function = None):
+    def __init__(self, file_name, allowed_id, disallowed_id=[], test_function = None, verbose = 1):
         self.file_name = file_name
         self.orbit = {}
         self.allowed_id = allowed_id
         self.disallowed_id = disallowed_id
         self.test_function = test_function
+        self.verbose = verbose
         self.parse_file()
         self.r_phi_track_file()
 
@@ -239,7 +251,8 @@ class LoadOrbit(object):
             line_count += 1
             words = line.rstrip("\n").split()
             if len(words) != len(heading):
-                print("Line\n  "+line+"\nmismatched to heading\n  "+str(heading)+"\nin parse_file "+self.file_name)
+                if self.verbose:
+                    print("Line\n  "+line+"\nmismatched to heading\n  "+str(heading)+"\nin parse_file "+self.file_name)
             else:
                 words = [self.types[i](x)*self.units[i] for i, x in enumerate(words)]
                 if self.allowed_id and words[0] not in self.allowed_id:
@@ -248,11 +261,15 @@ class LoadOrbit(object):
                     continue
                 is_okay = self.test_function == None or not self.test_function(words)
                 if not is_okay:
-                    print("Stopping due to failed test function at", words, self.test_function(words))
+                    if self.verbose:
+                        print("Stopping due to failed test function at", words, self.test_function(words))
                     break
                 for i, item in enumerate(heading):
                     self.orbit[item].append(words[i])
-        print("Got", len(self.orbit["x"]), "/", line_count, "lines from file "+self.file_name, "with allowed_id:", self.allowed_id)
+        if self.verbose > 10:
+            print("Got", len(self.orbit["x"]), "/", line_count,
+                  "lines from file "+self.file_name,
+                  "with allowed_id:", self.allowed_id)
 
     @classmethod
     def fix_domain(self, phi):
@@ -410,7 +427,9 @@ class PlotFields(object):
         self.do_pipe = False
         self.polygon_plotter = polygon_plotter
         self.log_plotter = None
+        self.spiral_contours = None
         self.azimuthal_field_plot = ['br', 'bphi', 'bz']
+
 
     def field_fig(self, job_name, centre, range_x, range_y, do_elevation=False):
         """
@@ -486,10 +505,51 @@ class PlotFields(object):
             self.log_plotter.plot(axes)
         for orbit in self.orbit_list:
             orbit.plot_2d(axes, "x", "y", range_x, range_y)
-        axes.legend()
+        #axes.legend()
         return figure
 
-    def azimuthal_fig(self, job_name, range_phi, time_plot_phi = None):
+    def draw_spiral_contours(self, axes):
+        mapper = pyopal.objects.ffa_field_mapper.FFAFieldMapper()
+        rmin, rmax = axes.get_ylim()
+        mapper.r_points = numpy.linspace(rmin, rmax, 20)
+        self.r_points = mapper.r_points
+        for contour in self.spiral_contours:
+            if "phi1" in contour:
+                self.draw_cylindrical_spiral_polygon(axes, contour)
+            else:
+                mapper.draw_cylindrical_spiral_contour(axes, contour)
+
+    def draw_cylindrical_spiral_polygon(self, axes, contour):
+        """
+        Draw a radially spiralling contour on axes
+        - axes: matplotlib Axes object to draw on.
+        - contour: dictionary (see default_contour for definitions)
+        """
+        xlim = axes.get_xlim()
+        ylim = axes.get_ylim()
+        tan_d = math.tan(math.radians(contour["spiral_angle"]))
+        r_points = [r for r in self.r_points]
+        phi_points = [math.radians(contour["phi0"]) + \
+                         tan_d*math.log(r/contour["r0"]) for r in r_points]
+        phi_points += [math.radians(contour["phi1"]) + \
+                         tan_d*math.log(r/contour["r0"]) for r in reversed(r_points)]
+        phi_points = [math.degrees(phi) for phi in phi_points]
+        r_points += [r for r in reversed(r_points)]
+
+        axes.fill(phi_points, r_points,
+                  linestyle=contour["linestyle"],
+                  color=contour["colour"],
+                  alpha=contour["alpha"])
+        axes.text(phi_points[-1],
+                  self.r_points[-1],
+                  contour["label"],
+                  va="top",
+                  rotation="vertical",
+                  color=contour["colour"])
+        axes.set_xlim(xlim)
+        axes.set_ylim(ylim)
+
+    def azimuthal_fig(self, job_name, range_phi, time_plot_phi = None, do_field_plot = False):
         figure = matplotlib.pyplot.figure(figsize=(20, 10))
         axes = figure.add_subplot(2, 2, 1)
         optimisation_tools.utils.utilities.setup_large_figure(axes)
@@ -501,8 +561,14 @@ class PlotFields(object):
         optimisation_tools.utils.utilities.setup_large_figure(axes)
         for orbit in self.orbit_list:
             orbit.plot_2d(axes, 'phi', 'r', range_phi, None)
-        #axes.legend()
+        if do_field_plot:
+            range_r = axes.get_ylim()
+            self.plot_2d(axes.figure, axes, [0.0, 0.0], range_phi, range_r, [-self.b0, self.b0], "phi", "r", "bz")
+            for orbit in self.orbit_list:
+                orbit.plot_2d(axes, 'phi', 'r', range_phi, None)
 
+        if self.spiral_contours != None:
+            self.draw_spiral_contours(axes)
         axes = figure.add_subplot(2, 2, 3)
         optimisation_tools.utils.utilities.setup_large_figure(axes)
         self.plot_1d_orbit(axes, self.orbit_list[0], 'phi', self.azimuthal_field_plot, range_phi, None)
@@ -680,8 +746,6 @@ class PlotFields(object):
         axes.legend()
 
     def plot_2d(self, figure, axes, centre, range_x, range_y, range_z, var_x, var_y, var_z):
-        i_x = self.pos_vars.index(var_x)
-        i_y = self.pos_vars.index(var_y)
         min_x, max_x = range_x[0], range_x[1]
         min_y, max_y = range_y[0], range_y[1]
         min_z, max_z = range_z[0], range_z[1]
@@ -693,18 +757,18 @@ class PlotFields(object):
         z_list = []
         for i in range(self.n_2d_points-1):
             x = step_x*(i+0.5)+min_x
-            pos[i_x] = x
             for j in range(self.n_2d_points-1):
                 y = step_y*(j+0.5)+min_y
-                pos[i_y] = y
-                z = self.fields.get(var_z, pos[0], pos[1], pos[2], pos[3])
-                if z > max_z:
-                    z = max_z
-                if z < min_z:
-                    z = min_z
                 x_list.append(x)
                 y_list.append(y)
-                z_list.append(z)
+        point_list = self.get_points(var_x, var_y, x_list, y_list)
+        for point in point_list:
+            z = self.fields.get(var_z, point[0], point[1], point[2], point[3])
+            if z > max_z:
+                z = max_z
+            if z < min_z:
+                z = min_z
+            z_list.append(z)
         cmax = max(abs(min_z), abs(max_z))
         vtot = max([abs(min(z_list)), max(z_list)])
         vtot = cmax #min(vtot, cmax)
@@ -716,6 +780,23 @@ class PlotFields(object):
         if self.do_pipe:
             self.cartesian_lines(axes)
         figure.colorbar(hist[3], ax=axes)
+
+    def get_points(self, var_x, var_y, x_list, y_list):
+        point_list = [[0., 0., 0., 0.] for x in x_list]
+        if var_x in self.pos_vars and var_y in self.pos_vars:
+            i_x = self.pos_vars.index(var_x)
+            i_y = self.pos_vars.index(var_y)
+            for i, point in enumerate(point_list):
+                point[i_x] = x_list[i]
+                point[i_y] = y_list[i]
+            return point_list
+        elif var_x == "phi" and var_y == "r":
+            for i, point in enumerate(point_list):
+                point[0] = y_list[i]*math.cos(math.radians(x_list[i]))
+                point[1] = y_list[i]*math.sin(math.radians(x_list[i]))
+            return point_list
+        else:
+            raise RuntimeError("Failed to parse variables", var_x, var_y)
 
     def plot_1d_orbit(self, axes, orbit, var_x, var_y_list, range_x, range_y):
         i_list = [i for i, x in enumerate(orbit.orbit.orbit[var_x]) \
@@ -799,31 +880,49 @@ class PlotH5(object):
         self.plot_phase_space(axes, "phiv", "av", z_axis, station)
 
 class LoadH5(object):
-    def __init__(self, file_name_glob, time_window = None):
+    def __init__(self, file_name_glob, time_window = None, verbose = 1, is_clockwise = False, will_load = True):
         self.mass = xboa.common.pdg_pid_to_mass[2212]
         self.time_window = time_window
         self.height_window= [-100.0, 100.]
         self.id_cut = [0]
+        self.id_include = None
         self.file_name_glob = file_name_glob
         self.data = []
-        f_glob = glob.glob(self.file_name_glob)
-        self.station_count = len(f_glob)
-        self.station_ids = dict((fname, index) for index, fname in enumerate(f_glob))
-        print ("Globbing ", self.file_name_glob, "yields", f_glob)
-        for station, file_name in enumerate(f_glob):
-            self.load_h5_probe(file_name)
+        self.f_glob = sorted(glob.glob(self.file_name_glob))
+        self.station_count = len(self.f_glob)
+        self.station_ids = dict((fname, index) for index, fname in enumerate(self.f_glob))
+        self.verbose = verbose
+        self.direction = 1
+        self.station_dt = 1.0e-9 # if two hits in the same station and same id have dt < station_dt, discard the second hit
+        if is_clockwise:
+            self.direction = -1
+        if self.verbose > 0:
+            print ("Globbing ", self.file_name_glob, "yields", self.f_glob)
+        if will_load:
+            self.load_probes()
+
+    def load_probes(self):
+        for station, file_name in enumerate(self.f_glob):
+            try:
+                self.load_h5_probe(file_name)
+            except Exception:
+                sys.excepthook(*sys.exc_info())
+                print("Error while opening", file_name)
 
     def load_h5_probe(self, file_name, station_list = None):
         # BUG - why is this so slow!
         data = []
-        print("Loading h5 file", file_name, end=" ")
+        if self.verbose > 10:
+            print("Loading h5 file", file_name, end=" ")
         h5_file = h5py.File(file_name, 'r')
         station_counter = {}
+        last_time = {} # t of last hit from particle with id#
         for key in h5_file.keys():
-            if key[:5] != "Step#":
+            if key[:5] != "Step#" and self.verbose > 20:
                 print("skipping key", key, end=" ")
                 continue
-            print("    ... ... ...", key)
+            if self.verbose > 20:
+                print("    ... ... ...", key)
             n_steps = len(h5_file[key]["x"])
             h5_step = h5_file[key]
             fdict = {}
@@ -834,23 +933,29 @@ class LoadH5(object):
                 fdict[var] = [x for x in h5_var]
             h5_step = fdict
             for i in range(n_steps):
+                time =  h5_step["time"][i]
                 hit_id = h5_step["id"][i]
                 if hit_id not in station_counter:
                     station_counter[hit_id] = self.station_ids[file_name]
+                    last_time[hit_id] = time
                 else:
+                    if abs(time - last_time[hit_id]) < self.station_dt:
+                        continue
+                    last_time[hit_id] = time
                     station_counter[hit_id] += self.station_count
                 px = h5_step["px"][i]*self.mass
                 py = h5_step["py"][i]*self.mass
                 pz = h5_step["pz"][i]*self.mass
                 phi = math.atan2(h5_step["y"][i], h5_step["x"][i])
-                pphi = px*math.sin(phi) - py*math.cos(phi)
+                pphi = (-px*math.sin(phi) + py*math.cos(phi))*self.direction
+                energy = (px**2+py**2+pz**2+self.mass**2)**0.5-self.mass
                 item = {
                     "id":hit_id,
                     "station":station_counter[hit_id],
                     "x":h5_step["x"][i],
                     "y":h5_step["y"][i],
                     "z":h5_step["z"][i],
-                    "t":h5_step["time"][i],
+                    "t":time,
                     "phi":math.degrees(phi),
                     "r":(h5_step["x"][i]**2+h5_step["y"][i]**2)**0.5,
                     "x'":px/pphi,
@@ -862,14 +967,18 @@ class LoadH5(object):
                     "py":py,
                     "pz":pz,
                     "pphi":pphi,
-                    "pr":(px*math.cos(phi) + py*math.sin(phi))
+                    "pr":(px*math.cos(phi) + py*math.sin(phi)),
+                    "energy":energy
                 }
                 self.phi_domain(item)
                 data.append(item)
-                print("H5", [(var, format(item[var], "4.5g")) for var in ('r', 'phi', 'pr', 'pphi')])
-        print("... found", len(data), "points and after cuts", end=" ")
+                if self.verbose > 20:
+                    print("H5", [(var, format(item[var], "4.5g")) for var in ('r', 'phi', 'pr', 'pphi')])
+        if self.verbose > 10:
+            print("... found", len(data), "points and after cuts", end=" ")
         data = self.cut(data)
-        print("...", len(data), "points")
+        if self.verbose > 10:
+            print("...", len(data), "points")
         self.data += data
 
     def set_closed_orbit(self, closed_orbit):
@@ -880,7 +989,7 @@ class LoadH5(object):
                     item.update({"u":0.0, "up":0.0, "v":0.0, "vp":0.0, 
                                  "phiu":0.0, "au":0.0, "phiv":0.0, "av":0.0, "a4d":0.0})
                     continue
-                coupled = [item["r"]*1e3 - ref["x"], ref["x'"]-item["r'"], item["z"]*1e3 - ref["y"], ref["y'"] - item["z'"]]
+                coupled = [item["r"]*1e3 - ref["x"], ref["px"]/ref["pz"]-item["r'"], item["z"]*1e3 - ref["y"], ref["y'"] - item["z'"]]
                 decoupled = closed_orbit.tm.decoupled(coupled).tolist()
                 aa = closed_orbit.tm.coupled_to_action_angle(coupled)
                 aa[1] *= ref["p"]/self.mass
@@ -901,6 +1010,8 @@ class LoadH5(object):
     def cut(self, data):
         if self.id_cut:
             data = [item for item in data if item["id"] not in self.id_cut]
+        if self.id_include:
+            data = [item for item in data if item["id"] in self.id_include]
         if self.time_window and len(data):
             start_time = min([item["t"] for item in data])
             data = [item for item in data if item["t"] < start_time+self.time_window]
@@ -911,11 +1022,13 @@ class LoadH5(object):
     azimuthal_domain = [-180.0, 180.0]
 
 class LoadClosedOrbit(object):
-    def __init__(self, file_name, tm_is_decoupled=False):
+    def __init__(self, file_name, tm_entry=None, tm_is_decoupled=False):
         self.ref_track = []
         self.tm = None
         self.file_name = file_name
         self.tm_is_decoupled = True
+        self.tm_entry = tm_entry # take the i^th entry in tm_list (for multiple cells)
+        self.pid = 2212
         self.load_closed_orbits()
 
     def load_closed_orbits(self):
@@ -923,11 +1036,15 @@ class LoadClosedOrbit(object):
         co = json.loads(fin.readline())[0]
         self.ref_track = []
         for hit in co["ref_track"]:
-            mass = xboa.common.pdg_pid_to_mass[2212]
-            hit.update({"pid":2212, "mass":mass, "charge":1.})
+            mass = xboa.common.pdg_pid_to_mass[self.pid]
+            hit.update({"pid":self.pid, "mass":mass, "charge":1.})
             hit = xboa.hit.Hit.new_from_dict(hit)
             self.ref_track.append(hit)
-        tm = [row[1:5] for row in co["tm"]]
+        if self.tm_entry is None:
+            tm = co["tm"]
+        else:
+            tm = co["tm_list"][self.tm_entry]
+        tm = [row[1:5] for row in tm]
         if self.tm_is_decoupled:
             self.tm = TwoDTransferMatrix(tm, True)
         else:
@@ -1021,5 +1138,20 @@ class PlotPolygon(object):
             y_list.append(y_list[-1]+self.cell_length*math.cos(theta))
             theta = theta + 2.0*math.pi/self.n_cells
         axes.plot(x_list, y_list, c="lightgrey")
+
+class PlotUtils():
+    def __init__(self):
+        pass
+
+    @classmethod
+    def hist_range(cls, data_list):
+        if len(data_list) < 2:
+            raise ValueError("Not enough points in data_list"+str(data_list))
+        data_list = sorted(list(set(data_list)))
+        x_min = data_list[0]-(data_list[1]-data_list[0])/2
+        x_max = data_list[-1]+(data_list[-1]-data_list[-2])/2
+        n_points = len(data_list)
+        return n_points, x_min, x_max
+
 
 

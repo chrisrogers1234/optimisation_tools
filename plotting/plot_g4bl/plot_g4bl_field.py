@@ -8,6 +8,7 @@ class PlotG4Fields(object):
 
     def load_file(self, file_name):
         self.data = []
+        print("opening", file_name)
         fin = open(file_name)
         line = "new"
         while line:
@@ -22,16 +23,19 @@ class PlotG4Fields(object):
     def plot(self, axes, x_index, y_index):
         x_values = [values[x_index] for values in self.data]
         y_values = [values[y_index] for values in self.data]
-        axes.plot(x_values, y_values)
+        axes.plot(x_values, y_values, label = self.labels[y_index])
         axes.set_xlabel(self.labels[x_index])
         axes.set_ylabel(self.labels[y_index])
 
     def plot_bfield(self, z_lim=None):
         figure = matplotlib.pyplot.figure()
         axes = figure.add_subplot(1,1,1)
-        self.plot(axes, 2, 6)
-        self.plot(axes, 2, 5)
+        self.plot(axes, 2, 3)
         self.plot(axes, 2, 4)
+        self.plot(axes, 2, 5)
+        axes.set_ylabel("B [T]")
+        axes.set_ylim([-0.5, 0.5])
+        axes.legend()
         if z_lim:
             axes.set_xlim(z_lim)
         figure.savefig(os.path.join(self.output_dir, "bfield.png"))
@@ -43,10 +47,11 @@ class PlotG4Fields(object):
             ]
 
 def main():
-    output_dir = "output/musr_cooling_v4/pz=10_dp=ppmm_cooling_closed_orbit/"
-    file_name = os.path.join(output_dir, "tmp/find_closed_orbits/field_map.txt")
+    output_dir = "output/ruihu_cooling_v1/test/"
+    file_name = os.path.join(output_dir, "tmp/find_closed_orbits/field_cell.dat")
     plotter = PlotG4Fields()
     plotter.output_dir = output_dir
+    plotter.labels = plotter.labels[0:3] +plotter.labels[4:7]
     plotter.load_file(file_name)
     plotter.plot_bfield()
 

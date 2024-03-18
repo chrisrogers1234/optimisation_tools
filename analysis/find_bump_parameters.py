@@ -146,6 +146,8 @@ class TuneScore(Score):
         self.i_list = [i for i in range(len(self.vars))]
         self.n_tunes = int(len(self.vars)/2)
         self.tunes = [0 for i in range(self.n_tunes)]
+        self.orbit = [0 for var in self.vars]
+        self.tm = numpy.array([[0 for var in self.vars] for var in self.vars])
         self.fmt = "14.9g"
 
     def requires_transfer_matrix(self):
@@ -188,6 +190,13 @@ class TuneScore(Score):
             print(transfer_map)
         return transfer_map
 
+    def get_orbit(self, station_list):
+        if station_list:
+            orbit = [station_list[0][var] for var in self.vars]
+        else:
+            orbit = [0 for var in self.vars]
+        return orbit
+
     def get_tune(self, tm):
         cosmu = (tm[0,0]+tm[1,1])/2.0
         if abs(cosmu) > 1.0:
@@ -205,6 +214,7 @@ class TuneScore(Score):
     def get_score(self, hit_list_of_lists):
         source_hits, station_hits = self.get_station_hits(hit_list_of_lists)
         try:
+            self.orbit = self.get_orbit(station_hits)
             self.tm = self.get_tm(source_hits, station_hits)
             for i in range(self.n_tunes):
                 sub_matrix = numpy.array(self.tm)[2*i:2*i+2, 2*i:2*i+2]
@@ -222,6 +232,7 @@ class TuneScore(Score):
         output = {
             "score_type":"tune",
             "station":self.station,
+            "orbit":self.orbit,
             "tunes":self.tunes,
             "target":self.target_tune,
             "transfer_matrix":self.tm.tolist(),
@@ -528,7 +539,7 @@ class FindBumpParameters(object):
                 psv = copy.deepcopy(co_dict)
                 psv[key] += delta_dict[key]*d
                 yield psv
-        
+
     def track_some(self, psv_list):
         utilities.clear_dir(self.tmp_dir)
         os.chdir(self.tmp_dir)
@@ -541,11 +552,10 @@ class FindBumpParameters(object):
             my_hit = copy.deepcopy(self.tracking.ref)
             for var in psv:
                 my_hit[var] = psv[var]
-            pz2 = (self.tracking.ref["p"]**2-my_hit["px"]**2-my_hit["py"]**2)
-            if pz2 <= 0:
-                print ("Ref p", self.tracking.ref["p"], "test px", my_hit["px"])
-                raise ValueError("Could not track particle with complex momentum")
-            my_hit["pz"] = pz2**0.5
+            if "x'" in self.config.find_bump_parameters["vars"]:
+                my_hit.mass_shell_condition("p")
+            else:
+                my_hit.mass_shell_condition("pz")
             hit_list.append(my_hit)
         self.setup_subs(hit_list)
         print("Reference kinetic energy:", self.tracking.ref["kinetic_energy"])
@@ -556,7 +566,6 @@ class FindBumpParameters(object):
             print("("+str(i)+",", fname+")", end=' ')
         print()
         return hit_list_of_lists
-
 
     root_algorithms = ["simplex", "migrad"]
 

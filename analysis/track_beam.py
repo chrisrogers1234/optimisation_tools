@@ -56,9 +56,16 @@ class BeamGen(object):
         elif beam["type"] == "last" or beam["type"] == "recycle":
             beam_gen = Recycle(config, beam)
             hit_list = beam_gen.gen_beam()
+        elif beam["type"] == "beam_file":
+            beam_gen = BeamFile(config, beam)
+            hit_list = beam_gen.gen_beam()
         else:
             raise ValueError("Did not recognise beam of type "+str(setting["beam"]["type"]))
         return hit_list
+
+    MeV = 1.0e3
+    GeV = 1.0
+
 
 class MultiBeam(object):
     def __init__(self, config, beam):
@@ -109,7 +116,7 @@ class MVG(BeamGen): # Multivariate Gaussian
         print(self.cov)
         pid = self.config.tracking["pdg_pid"]
         mass = xboa.common.pdg_pid_to_mass[abs(pid)]
-        energy = self.beam["energy"]+mass
+        energy = self.beam["energy"]*self.MeV+mass
         pz = (energy**2-mass**2)**0.5
         ref_dict = {"energy":energy, "mass":mass, "pid":pid, "pz":pz}
         for i, var in enumerate(var_list):
@@ -147,7 +154,6 @@ class BeamShells(BeamGen):
         tm = copy.deepcopy(co["tm"])
         for i, row in enumerate(tm):
             tm[i] = row[1:5]
-        print(self.config.track_beam)
         if self.config.track_beam["do_decoupling"]:
             self.tm = DecoupledTransferMatrix(tm, True)
         else:
@@ -228,12 +234,12 @@ class BeamShells(BeamGen):
         if dist == "gaussian":
             return self.gen_gaussian_longitudinal(n_events)
         elif dist == "None" or not dist:
-            return numpy.array([[0.0, self.config.track_beam["energy"]]]*n_events)
+            return numpy.array([[0.0, self.config.track_beam["energy"]*self.MeV]]*n_events)
         else:
             raise KeyError("Did not recognise longitudinal_dist type "+str(dist))
 
     def gen_gaussian_longitudinal(self, n_events):
-        mean = [0.0, self.config.track_beam["energy"]]
+        mean = [0.0, self.config.track_beam["energy"]*self.MeV]
         cov = self.config.track_beam["longitudinal_params"]
         return numpy.random.multivariate_normal(mean, cov, n_events)
 
@@ -290,11 +296,11 @@ class BeamGrid(BeamGen):
             self.hit_list.append(point)
 
     def make_hit(self, point):
-        if "x'"  in self.config.track_beam["variables"] and\
-           "y'" in self.config.track_beam["variables"]:
+        if "x'"  in self.beam["variables"] and\
+           "y'" in self.beam["variables"]:
             return self.geometric_hit(point)
-        elif "x'"  in self.config.track_beam["variables"] or\
-             "y'" in self.config.track_beam["variables"]:
+        elif "x'"  in self.beam["variables"] or\
+             "y'" in self.beam["variables"]:
             raise KeyError("Cant mix geometric and normalised")
         else:
             return self.normalised_hit(point)
@@ -302,10 +308,10 @@ class BeamGrid(BeamGen):
     def geometric_hit(self, point):
         pid = self.config.tracking["pdg_pid"]
         mass = xboa.common.pdg_pid_to_mass[abs(pid)]
-        energy = self.beam["energy"]+mass
+        energy = self.beam["energy"]*self.MeV+mass
         hit_dict = {"energy":energy, "mass":mass, "pid":pid}
         hit_dict["pz"] = (energy**2-mass**2)**0.5/(1+point[1]**2+point[3]**2)**0.5
-        for i, var in enumerate(self.config.track_beam["variables"]):
+        for i, var in enumerate(self.beam["variables"]):
             hit_dict[var] = point[i]
         hit = xboa.hit.Hit.new_from_dict(hit_dict, "pz")
         return hit
@@ -313,9 +319,9 @@ class BeamGrid(BeamGen):
     def normalised_hit(self, point):
         pid = self.config.tracking["pdg_pid"]
         mass = xboa.common.pdg_pid_to_mass[abs(pid)]
-        energy = self.beam["energy"]+mass
+        energy = self.beam["energy"]*self.MeV+mass
         hit_dict = {"energy":energy, "mass":mass, "pid":pid}
-        for i, var in enumerate(self.config.track_beam["variables"]):
+        for i, var in enumerate(self.beam["variables"]):
             hit_dict[var] = point[i]
         hit = xboa.hit.Hit.new_from_dict(hit_dict, "pz")
         return hit
@@ -350,9 +356,6 @@ class Recycle(BeamGen):
             tracking = self.tracking_store[setting_name]
         hit_list = [hit_list[station] for hit_list in self.last_tracking if station < len(hit_list)]
         hit_list = self.offset(hit_list)
-        print("Hits for recycling")
-        for hit in hit_list:
-            print(hit)
         return hit_list
  
     def offset(self, hit_list):
@@ -363,6 +366,38 @@ class Recycle(BeamGen):
         for hit in hit_list:
             for key, value in offset.items():
                 hit[key] += value 
+        return hit_list
+
+    @classmethod
+    def store_tracking(cls, name, tracks):
+        cls.tracking_store[name] = tracks
+        cls.last_tracking = tracks
+
+    tracking_store = {}
+    last_tracking = None
+
+
+class BeamFile(BeamGen):
+    def __init__(self, config, beam):
+        self.config = config
+        self.beam = beam
+
+    def gen_beam(self):
+        fname = self.beam["filename"]
+        file_format = self.beam["format"]
+        beam = xboa.bunch.Bunch.new_from_read_builtin(file_format, filename)
+        hit_list = [hit for hit in beam]
+        hit_list = self.offset(hit_list)
+        return hit_list
+
+    def offset(self, hit_list):
+        if "offset" not in self.beam:
+            return hit_list
+        offset = self.beam["offset"]
+        print("Offsetting", offset)
+        for hit in hit_list:
+            for key, value in offset.items():
+                hit[key] += value
         return hit_list
 
     @classmethod
@@ -415,38 +450,26 @@ class TrackBeam(object):
 
     def beam_setting(self, setting):
         self.hit_list = BeamGen.beam_setting(setting["beam"], self.config)
-        return
-        if setting["beam"]["type"] == "last":
-            station = setting["beam"]["station"]
-            self.hit_list = [hit_list[station] for hit_list in self.last_tracking if station < len(hit_list)]
-        elif setting["beam"]["type"] == "recycle":
-            station = setting["beam"]["station"]
-            setting_name = setting["beam"]["setting_name"]
-            tracking = self.tracking_store[setting_name]
-            self.hit_list = [hit_list[station] for hit_list in tracking if station < len(hit_list)]
-        else:
-            self.hit_list = BeamGen.beam_setting(setting["beam"], self.config)
 
     def track_setting(self, setting): 
+        # somewhere in here there is a bug - subs list is getting overwritten
         print("Starting setting", setting["name"], "#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#~#")      
         self.tracking = utilities.setup_tracking(self.config,
                                                   setting["probe_files"],
-                                                  setting["beam"]["energy"])
+                                                  setting["beam"]["energy"]) # energy is in GeV
         self.beam_setting(setting)
+
         self.config.substitution_list[0].update({"__n_particles__":len(self.hit_list)})
         utilities.do_lattice(self.config,
                              self.config.substitution_list[0],
-                             setting["subs_overrides"])
+                             setting["subs_overrides"], tracking = self.tracking)
         if setting["direction"] == "backwards":
             for hit in self.hit_list:
                 for var in "px", "py", "pz":
                     hit[var] *= -1
                 pid = self.config.tracking["pdg_pid"]
                 mass = xboa.common.pdg_pid_to_mass[abs(pid)]
-                #pz = ((mass+setting["beam"]["energy"])**2-mass**2)**0.5
-                #hit["pz"] += 4*pz
                 hit["z"] = 0.0
-                print("Backwards pz", hit["pz"])
         elif setting["direction"] != "forwards":
             raise RuntimeError("Direction must be forwards or backwards")
 
