@@ -16,8 +16,16 @@ N_PROCS = 11
 TARGET_SCRIPT = "run_many_"
 TIME_0 = time.time()
 LOG_DIR = "logs"
+WATCHPOINT = "__watchpoint__"
+POLL_INTERVAL = 5
 
 def do_at_exit():
+    """
+    At exit, kill any lurking processes
+
+    On scarf this is achieved by calling scancel; locally this is achieved by
+    calling signal.SIGKILL on the process.
+    """
     proc_queue = poll()
     if is_scarf():
         print("Killing all child processes ... good bye")
@@ -33,8 +41,10 @@ def do_at_exit():
     print("Au revoir")
 
 def will_make_new_procs(temp_proc_queue):
-    global PROC_QUEUE, N_PROCS
-    return len(temp_proc_queue) < N_PROCS and len(PROC_QUEUE) > 0
+    global PROC_QUEUE, N_PROCS, WATCHPOINT
+    needs_new_procs = len(temp_proc_queue) < N_PROCS and len(PROC_QUEUE) > 0
+    is_watch_point = len(temp_proc_queue) > 0 and temp_proc_queue[-1][0] == WATCHPOINT
+    return needs_new_procs and not is_watch_point
 
 def archive_logs():
     old_dir = os.path.join(LOG_DIR, "old")
@@ -49,15 +59,20 @@ def archive_logs():
         os.rename(fname, new_name)
 
 def poll_process_queue():
-    global UNIQUE_ID, PROC_RUNNING, PROC_QUEUE, TIME, LOG_DIR
+    global UNIQUE_ID, PROC_RUNNING, PROC_QUEUE, TIME, LOG_DIR, WATCHPOINT
     print("\r", round(time.time()-TIME_0, 1), "...",
           "Running", len(PROC_RUNNING), 
           "with", len(PROC_QUEUE), "queued", end=" ")
     temp_proc_queue = poll()
     if will_make_new_procs(temp_proc_queue):
         print()
+    # make new processes unless queue is full or the back of the queue is a
+    # watchpoint
     while will_make_new_procs(temp_proc_queue):
         subproc_args, logname = PROC_QUEUE.pop(0)
+        if WATCHPOINT in subproc_args:
+            temp_proc_queue.append((WATCHPOINT, WATCHPOINT))
+            continue
         UNIQUE_ID += 1
         job_log = LOG_DIR+"/"+logname+".log"
         job_name = f"run_many_{UNIQUE_ID}"
@@ -80,9 +95,26 @@ def poll():
         temp_proc_queue = poll_laptop()
     return temp_proc_queue
 
+def proc_is_watchpoint(proc):
+    """
+    Check for a watchpoint in the PROC_RUNNING list. If so return True. If the
+    PROC_RUNNING list is of length 1, also remove the watchpoint. If there is
+    no watchpoint in PROC_RUNNING, return False.
+    """
+    global PROC_RUNNING, WATCHPOINT
+    if proc == WATCHPOINT:
+        return True
+    return False
+
 def poll_laptop():
+    global PROC_RUNNING
     temp_proc_queue = []
     for proc, jobname in PROC_RUNNING:
+        if proc_is_watchpoint(proc): # it is a watchpoint, don't poll
+            if len(PROC_RUNNING) > 1: # keep the watchpoint unless it is the last job in the queue
+                print("(found watchpoint...) ", end="")
+                temp_proc_queue.append((proc, jobname))
+            continue
         if proc.poll() == None:
             temp_proc_queue.append((proc, jobname))
         else:
@@ -121,12 +153,12 @@ def load_configs():
     return job_list
 
 def main(config_file):
+    global N_PROCS, TARGET_SCRIPT, UNIQUE_ID, PROC_QUEUE, WATCHPOINT, POLL_INTERVAL
     atexit.register(do_at_exit)
     archive_logs()
     configs = load_configs()
     if os.getenv("OPAL_EXE_PATH") == None:
         raise ValueError("No OPAL_EXE_PATH set")
-    global N_PROCS, TARGET_SCRIPT, UNIQUE_ID
     if not os.path.exists("logs"):
         os.makedirs("logs")
     if is_scarf():
@@ -137,6 +169,8 @@ def main(config_file):
         log_file = log_file[:-3]
         if len(config) > 0:
             log_file = log_file+"_"+"_".join(config[1:])
+        if config[0] == WATCHPOINT:
+            PROC_QUEUE.append( ([WATCHPOINT], WATCHPOINT) )
         run_one = os.path.expandvars("${OPTIMISATION_TOOLS}/bin/run_one.py")
         proc_tuple = (["python", run_one]+config, log_file)
         PROC_QUEUE.append(proc_tuple)
@@ -145,7 +179,7 @@ def main(config_file):
         poll_process_queue()
         if len(PROC_QUEUE) == 0 and len(PROC_RUNNING) == 0:
             break
-        time.sleep(5)
+        time.sleep(POLL_INTERVAL)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

@@ -239,7 +239,7 @@ class PlotG4BL(object):
                 if all_hist[j]:
                     weight.append(good_hist[j]/all_hist[j])
                 else:
-                    weight.append(0)
+                    weight.append(nan)
         figure = matplotlib.pyplot.figure(figsize=(20,10))
         axes = figure.add_subplot(1, 1, 1)
         hist = axes.hist2d(x_value, y_value, [x_bins, y_bins], weights=weight)
@@ -278,26 +278,37 @@ class PlotG4BL(object):
     }
     beta_limit = 1e4
 
-def do_plot(run_dir, b1, b3, l):
-    suffix = "b1="+b1+"_b3="+b3+"_l="+l
-    title = "b$_1$={0} [T]; b$_3$={1} [T]".format(b1, b3)
-    plot_dir = run_dir+"/plot_dynamic_aperture_"+suffix+"/"
-    run_dir_glob = run_dir+"by=*_pz=*"+suffix+"_*/"
+def do_plot(run_dir, pz, by, polarity, version):
+    args = locals()
+    del args["run_dir"]
+    fname = ""
+    for key, value in args.items():
+        fname += key+"="+value+"_"
+    fname = fname[:-1]
+    title = fname.replace("_", " ")
+    plot_dir = run_dir+"/plot_dynamic_aperture_"
+    for key, value in args.items():
+        plot_dir += key+"="+value+"_"
+    plot_dir = plot_dir[:-1]
+    run_dir_glob = os.path.join(run_dir, fname)
     file_name = "track_beam_amplitude/da_test//output*.txt"
     co_file_name = "closed_orbits_cache"
-    cell_length = 2000.0 # full cell length
+    cell_length = 1600.0 # full cell length
     file_format = "icool_for009"
     plotter = PlotG4BL(run_dir_glob, co_file_name, cell_length, file_name, file_format, plot_dir, 40.0)
     plotter.title = title
     plotter.beta_limit = 1e4
-    plotter.variables_of_interest = ["__cell_length__", "__coil_radius__", "__momentum__"]
+    plotter.variables_of_interest = ["__momentum__", "__dipole_field__"]
     plotter.a_4d_max = 50
     plotter.do_plots(1, 30)
 
 def main():
-    run_dir = "output/rectilinear_cooling_v23/"
-    for b1, b3, l in [("12", "6", "0.8"), ("6", "0", "0.8"), ("6", "3", "1.6")]:
-        do_plot(run_dir, b1, b3, l)
+    run_dir = "output/demo_v23/"
+    pz = "*"
+    by = "0.1"
+    polarity = "+--+"
+    version = "2024-04-16"
+    do_plot(run_dir, pz, by, polarity, version)
 
 if __name__ == "__main__":
     main()

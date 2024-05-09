@@ -28,49 +28,71 @@ import math
 import sys
 import shutil
 
+
+import ROOT
 from xboa import common
 import xboa.hit
 from xboa.hit import Hit
 from xboa.bunch import Bunch
+from xboa.tracking import TrackingBase
 
-from xboa.tracking import TrackingBase 
+IMPORTED_BDSIM_DEFINITIONS = False
+def import_bdsim_definitions():
+    global IMPORTED_BDSIM_DEFINITIONS
+    if IMPORTED_BDSIM_DEFINITIONS:
+        print("Already imported bdsim definitions")
+        return
+    import ROOT
+    if "BDSIM_LIB_PATH" not in os.environ:
+        raise ImportError("BDSIM_LIB_PATH must be an environment variable")
+    bdsim_path = os.environ["BDSIM_LIB_PATH"]
+    if not os.path.isdir(bdsim_path):
+        raise ImportError("BDSIM_LIB_PATH must point at a directory")
+    print("Loading from", bdsim_path)
+    ROOT.gSystem.AddDynamicPath(bdsim_path)
+    print("    Loading libbdsimRootEvent")
+    bdsLoad = ROOT.gSystem.Load("libbdsimRootEvent")
+    print("    Loading librebdsim")
+    reLoad  = ROOT.gSystem.Load("librebdsim")
+    print("Done loading ROOT libs")
+    IMPORTED_BDSIM_DEFINITIONS = True
 
-class G4BLTracking(TrackingBase):
+class BDSIMTracking(TrackingBase):
     """
-    Provides an interface to G4BL tracking routines
+    Provides an interface to BDSIM tracking routines
     """
-    def __init__(self, lattice_filename, beam_filename, reference_hit, output_filename, g4bl_path, log_filename = None):
+    def __init__(self, lattice_filename, beam_filename, reference_hit, output_filename, bdsim_path, log_filename = None):
         """
-        Initialise G4BLTracking routines
-        - lattice_filename is the G4BL lattice file that G4BLTracking will use
-        - beam_filename is a filename that G4BLTracking will overwrite when it
+        Initialise BDSIMTracking routines
+        - lattice_filename is the BDSIM lattice file that BSIMTracking will use
+        - beam_filename is a filename that BDSIMTracking will overwrite when it
           runs the tracking, putting in beam data
         - reference_hit defines the centroid for the tracking; this should
           correspond to 0 0 0 0 0 0 in the beam file
-        - output_filename the name of the output file that G4BLTracking will
+        - output_filename the name of the output file that BDSIMTracking will
           read to access output data; glob wildcards (*, ?) are allowed, in
           which case all files matching the wildcards will be loaded; if a list
-          is used, G4BL will glob each element in the list
-        - g4bl_path path to the G4BL executable
-        - allow_duplicate_station when evaluates to False, G4BLTracking will
+          is used, BDSIM will glob each element in the list
+        - bdsim_path path to the BDSIM executable
+        - allow_duplicate_station when evaluates to False, BDSIMTracking will
           discard duplicate stations on the same event
-        - log_filename set to a string file name where G4BLTracking will put the 
-          terminal output from the opal command; if None, G4BLTracking will make
+        - log_filename set to a string file name where BDSIMTracking will put the
+          terminal output from the opal command; if None, BDSIMTracking will make
           a temp file
         """
+        import_bdsim_definitions()
         self.verbose = True
         self.beam_filename = beam_filename
-        self.beam_format = "g4beamline_bl_track_file"
         self.lattice_filename = lattice_filename
         if type(self.lattice_filename) == type([]):
             self.lattice_filename = self.lattice_filename[0]
         self.output_filename_list = output_filename
-        self.output_format = "icool_for009"
+        self.output_format = "bdsim_root"
         if type(self.output_filename_list) == type(""):
             self.output_filename_list = [self.output_filename_list]
-        self.g4bl_path = g4bl_path
-        if not os.path.isfile(self.g4bl_path):
-            raise RuntimeError(str(self.g4bl_path)+" does not appear to exist."+\
+        self.bdsim_path = bdsim_path
+        if not os.path.isfile(self.bdsim_path):
+            raise RuntimeError(str(self.bdsim_path)+" does not appear to exist."+\
                   " Check that this points to the opal executable.")
         self.ref = reference_hit
         self.ignore_reference = True
@@ -78,9 +100,10 @@ class G4BLTracking(TrackingBase):
         self.pass_through_analysis = None
         self.do_tracking = True
         self.log_filename = log_filename
+        self.station_to_z_dict = None
         if self.log_filename == None:
             self.log_filename = tempfile.mkstemp()[1]
-        self.flags = []
+        self.flags = ["--batch"]
         self.clear_path = None
         self.min_track_number = 1 # minimum number of tracks
         self.name_dict = {}
@@ -136,7 +159,7 @@ class G4BLTracking(TrackingBase):
         
     def track_many(self, list_of_hits, renumber=1):
         """
-        Track many hits through G4BL
+        Track many hits through BDSIM
         - list_of_hits: list of type xboa.hit.Hit, the input particles to be tracked
         - renumber: set to an integer to reassign event ids, starting with renumber.
           Set to None to disable renumbering.
@@ -161,9 +184,9 @@ class G4BLTracking(TrackingBase):
             print("Return")
         return hit_list_of_lists
 
-    def open_subprocess(self):
-        self.cleanup()
-        command = [self.g4bl_path, self.lattice_filename]+self.flags
+    def open_subprocess(self, nevents):
+        #self.cleanup()
+        command = [self.bdsim_path, f"--file={self.lattice_filename}", f"--ngenerate={nevents}", "--batch"]+self.flags
         log = open(self.log_filename, "w")
         proc = subprocess.Popen(command,
                                 stdout=log,
@@ -171,48 +194,97 @@ class G4BLTracking(TrackingBase):
         return proc
 
     def _tracking(self, list_of_hits):
-        Hit.write_list_builtin_formatted(list_of_hits, self.beam_format, self.beam_filename)
+        with open(self.beam_filename, "w") as fout:
+            fout.write('"x [mm]" "px [rad]" "y [mm]" "py [rad]" "z [mm]" "Ek [MeV]" "t [ns]"\n')
+            for hit in list_of_hits:
+                hit.write_user_formatted(["x","x'","y","y'", "z", "kinetic_energy", "t"], {"x":"mm","x'":"","y":"mm","y'":"", "z":"mm", "kinetic_energy":"MeV", "t":"ns"}, fout)
         old_time = time.time()
-        proc = self.open_subprocess()
+        proc = self.open_subprocess(len(list_of_hits))
         proc.wait()
         if self.verbose:
             print("Ran for", time.time() - old_time, "s")
         if proc.returncode != 0:
             try:
-                raise RuntimeError("G4BL quit with non-zero error code "+\
+                raise RuntimeError("BDSIM quit with non-zero error code "+\
                                    str(proc.returncode)+". Review the log file: "+\
                                    os.path.join(os.getcwd(), self.log_filename))
             except:
                 sys.excepthook(*sys.exc_info())
 
+    @classmethod
+    def sampler_search(cls, event):
+        sampler_list = []
+        index = -1
+        while True:
+            index += 1
+            try:
+                sampler_list.append(getattr(event, f"s{index}"))
+            except AttributeError:
+                if index < 10:
+                    continue
+                elif index > 10:
+                    if len(sampler_list) == 0:
+                        raise RuntimeError(f"Could not find any samplers in {file_name}")
+                    elif index < len(sampler_list)*10:
+                        continue
+                    else:
+                        break
+        return sampler_list
+
+    @classmethod
+    def bdsim_rezedify(cls, hit, station_to_z_dict):
+        if station_to_z_dict == None:
+            return
+        hit["z"] = station_to_z_dict[hit["station"]]
+
+    @classmethod
+    def read_files(cls, file_name_list_of_globs, pass_through_analysis, station_to_z_dict=None, verbose=0):
+        mm = xboa.common.units["mm"]
+        gev = xboa.common.units["GeV"]
+        ns = xboa.common.units["ns"]
+        file_name_list = []
+        for file_name in file_name_list_of_globs:
+            file_name_list += glob.glob(file_name)
+        if verbose > 10:
+            print(f"Found {len(file_name_list)} files from glob {file_name}")
+        for file_name in file_name_list:
+            if verbose > 10:
+                print("Loading", file_name)
+            fin = ROOT.TFile(file_name)
+            for event_number, event in enumerate(fin.Get("Event")):
+                sampler_list = cls.sampler_search(event)
+                if verbose > 100:
+                    print(f"Found {len(sampler_list)} samplers in event {event_number}")
+                for station, sampler in enumerate(sampler_list):
+                    if len(sampler.x) == 0:
+                        continue
+                    hit_dict = {
+                        "x":sampler.x[0]*mm,
+                        "y":sampler.y[0]*mm,
+                        "z":sampler.z*mm,
+                        "t":sampler.T[0]*ns,
+                        "px":sampler.xp[0]*sampler.p[0]*gev,
+                        "py":sampler.yp[0]*sampler.p[0]*gev,
+                        "pz":sampler.zp[0]*sampler.p[0]*gev,
+                        "pid":sampler.partID[0],
+                        "station":station,
+                        "particle_number":sampler.trackID[0],
+                        "event_number":event_number
+                    }
+                    hit_dict["mass"] = xboa.common.pdg_pid_to_mass[abs(hit_dict["pid"])]
+                    hit = xboa.hit.Hit.new_from_dict(hit_dict, "energy")
+                    cls.bdsim_rezedify(hit, station_to_z_dict)
+                    print("station:", station, "ev:", event_number, "z:", hit["z"], "t:",hit["t"] , "E:", hit["energy"] )
+                    if verbose > 50:
+                        print("Loaded hit", hit_dict)
+                        print("Sampler energy was", sampler.energy[0]*gev, hit["energy"])
+                    assert(abs(hit["energy"] - sampler.energy[0]*gev) < 1e-4)
+                    pass_through_analysis.process_hit(event_number, hit)
+
+
     def _read_files(self):
         # loop over files in the glob, read events and sort by event number
-        file_name_list = []
-        for file_name in self.output_filename_list:
-            file_name_list += glob.glob(file_name)
-        for file_name in file_name_list:
-            if self.verbose > 10:
-                print("Loading", file_name)
-            n_good_lines, n_lines = 0, 0
-            fin = open(file_name)
-            while fin:
-                try:
-                    n_lines += 1
-                    hit = Hit.new_from_read_builtin(self.output_format, fin)
-                    event = hit["event_number"]
-                    if self.ignore_reference and event == 0:
-                        continue
-                    self.pass_through_analysis.process_hit(event, hit)
-                    n_good_lines += 1
-                except (EOFError, StopIteration):
-                    break                    
-                except (xboa.hit.BadEventError, ValueError):
-                    pass
-                except:
-                    sys.excepthook(*sys.exc_info())
-                    break
-            if self.verbose > 10:
-                print("Successfully parsed", n_good_lines, "/", n_lines, "lines")
+        self.read_files(self.output_filename_list, self.pass_through_analysis, self.station_to_z_dict, self.verbose)
         self.last = self.pass_through_analysis.finalise()
         return self.last
 

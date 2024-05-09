@@ -29,7 +29,7 @@ class PlotG4BL(object):
         self.px_range = [-80.0, 80.0]
         self.x_range = [-100.0, 100.0]
         self.pz_range = [1.0, 250.0]
-        self.e_range = [0.0, 5.0]
+        self.e_range = [200.0, 250.0]
         self.ct_range = [-300.0, 300.0]
         self.z_range = [None, None]
         self.file_format = file_format
@@ -134,15 +134,15 @@ class PlotG4BL(object):
             bunch.conditional_remove({"weight":0.00001}, operator.lt)
 
         print("Weights (plotted)", [bunch.bunch_weight() for bunch in data["bunch_list"]])
-        print("Transmission [%] ", transmission)
+        print("\nTransmission [%] ", transmission)
         emittance_xy = [bunch.get("emittance", ["x", "y"]) for bunch in data["bunch_list"]]
         emittance_ct = [self.get_eps_long(bunch) for bunch in data["bunch_list"]]
         emittance_6d_alt = [self.get_eps_6d(bunch) for bunch in data["bunch_list"]]
         emittance_6d = [emittance_ct[i]*emittance_xy[i]**2 for i in range(len(emittance_ct))]
-        print("Transverse emittance\n", emittance_xy)
-        print("Longitudinal emittance\n", emittance_ct)
-        print("6D emittance\n", emittance_6d)
-        print("6D emittance alt\n", emittance_6d_alt)
+        print("\nTransverse emittance\n", emittance_xy)
+        print("\nLongitudinal emittance\n", emittance_ct)
+        print("\n6D emittance\n", emittance_6d)
+        print("\n6D emittance alt\n", emittance_6d_alt)
         p_ref = [bunch[0]["p"] for bunch in data["bunch_list"]]
         p = [bunch.get("mean", ["p"]) for bunch in data["bunch_list"]]
         beta = []
@@ -153,12 +153,14 @@ class PlotG4BL(object):
                     beta[-1] = 0.0
             except Exception:
                 beta.append(0)
+
+        print("\nbeta_transverse\n", beta)
         for i, el in enumerate(emittance_ct):
             if el > self.el_limit:
                 emittance_ct[i] = 0.0
         z0 = data["bunch_list"][0][0]["z"]
         z = [(bunch[0]["z"]-z0)/xboa.common.units["m"] for bunch in data["bunch_list"]]
-        print("z position\n", z)
+        print("\nz position\n", z)
         figure = matplotlib.pyplot.figure(figsize=(20,10))
         figure.suptitle(data["plot_name"])
         axes = figure.add_subplot(2, 2, 1)
@@ -232,9 +234,9 @@ class PlotG4BL(object):
         print()
         for i, bunch in enumerate(data["bunch_list"][:self.max_station]):
             print("\r    Making movie frames", i, "/", len(data["bunch_list"]), end="")
-            my_vars = bunch.list_get_hit_variable(["x", "px", "y", "py", "ct", "kinetic_energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "mm", "MeV", ""])
+            my_vars = bunch.list_get_hit_variable(["x", "px", "y", "py", "ct", "energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "mm", "MeV", ""])
             bunch.conditional_remove({"weight":0.00001}, operator.lt)
-            my_vars_cut = bunch.list_get_hit_variable(["x", "px", "y", "py", "ct", "kinetic_energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "mm", "MeV", ""])
+            my_vars_cut = bunch.list_get_hit_variable(["x", "px", "y", "py", "ct", "energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "mm", "MeV", ""])
 
             figure = matplotlib.pyplot.figure(figsize=(20,10))
             figure.suptitle(data["plot_name"]+"\nz: "+str(bunch[0]['z']/xboa.common.units["m"])+" m; N: "+str(len(bunch)))
@@ -265,7 +267,7 @@ class PlotG4BL(object):
             axes.scatter(my_vars[0], my_vars[5], c="orange")
             axes.scatter(my_vars_cut[0], my_vars_cut[5])
             axes.set_xlabel("x [mm]")
-            axes.set_ylabel("Kinetic energy [MeV]")
+            axes.set_ylabel("Total energy [MeV]")
             axes.set_xlim(self.x_range)
             axes.set_ylim(self.e_range)
 
@@ -273,7 +275,7 @@ class PlotG4BL(object):
             axes.scatter(my_vars[2], my_vars[5], c="orange")
             axes.scatter(my_vars_cut[2], my_vars_cut[5])
             axes.set_xlabel("y [mm]")
-            axes.set_ylabel("Kinetic energy [MeV]")
+            axes.set_ylabel("Total energy [MeV]")
             axes.set_xlim(self.x_range)
             axes.set_ylim(self.e_range)
 
@@ -329,6 +331,9 @@ class PlotG4BL(object):
         "__energy__":None,
         "__wedge_opening_angle__":"wq",
         "__dipole_polarity1__":"dp",
+        "__wedge_thickness__":"dt",
+        "__version__":"version",
+        "__polarity__":"polarity",
     }
     key_subs = {
             "__wedge_opening_angle__":"$\\theta_w$",
@@ -337,6 +342,9 @@ class PlotG4BL(object):
             "__momentum__":"p$_{tot}$",
             "__energy__":None,
             "__dipole_polarity1__":"Dipole Polarity",
+            "__wedge_thickness__":"Wedge Thickness",
+            "__version__":"",
+            "__polarity__":"",
     }
     units_subs = {
             "__coil_radius__":"[mm]",
@@ -345,15 +353,18 @@ class PlotG4BL(object):
             "__momentum__":"[MeV/c]",
             "__energy__":"",
             "__dipole_polarity1__":"",
+            "__wedge_thickness__":"[mm]",
+            "__version__":"",
+            "__polarity__":"",
     }
     beta_limit = 4e3
     el_limit = 25
 
 def main():
-    run_dir = "output/musr_cooling_v3/"
+    run_dir = "output/demo_v20/"
     plot_dir = "emittance_plots/"
-    run_dir_glob = run_dir+"pz=10_dp=pppp_cooling_no_dipole_test/"
-    file_name = "track_beam_amplitude/equilibrium_test/output.txt"
+    run_dir_glob = run_dir+"*_version=2022-11-01/"
+    file_name = "track_beam_amplitude/optics_low_emittance/output.txt"
     cell_length = 2000.0 # full cell length
     file_format = "icool_for009"
     plotter = PlotG4BL(run_dir_glob, file_name, file_format, plot_dir)

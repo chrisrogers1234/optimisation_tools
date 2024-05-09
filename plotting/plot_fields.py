@@ -58,15 +58,17 @@ def injection():
     bumpp = "-0.05"
     dx1 = "-30.0"
     dx2 = "-20.0"
-
-    base_dir = "/home/cr67/work/2017-07-07_isis2/horizontal_isis3/output/2023-03-01_baseline/find_bump_v17/"
-    run_dir = f"{base_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_bump_full/plotting"
+    ref_dir = "/home/cr67/work/2017-07-07_isis2/horizontal_isis3/output/2023-03-01_baseline/find_bump_v17/"
+    base_dir = "/home/cr67/work/2017-07-07_isis2/horizontal_isis3/output/2023-03-01_baseline/find_bump_v18/"
+    run_dir = f"{ref_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_bump_full/plotting"
 
     orbit_folder_list = [
-        f"{base_dir}/bump=-0.0_by=0.0_bumpp=0.0/tmp/find_closed_orbits",
-        f"{base_dir}/bump={dx2}_by={by}_bumpp={bumpp}/track_beam/reference",
-        f"{base_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_beam/reference",
-        f"{base_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_bump_full/injection",
+        f"{ref_dir}/bump=-0.0_by=0.0_bumpp=0.0/tmp/find_closed_orbits",
+        f"{ref_dir}/bump={dx2}_by={by}_bumpp={bumpp}/track_beam/reference",
+        f"{ref_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_beam/reference",
+        f"{ref_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_bump_full/injection",
+        f"{base_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_beam/h0",
+        f"{base_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_beam/h-",
     ]
     name = f"injection_zoom_out_track_by={by}"
 
@@ -90,7 +92,7 @@ def hardcoded_contours():
             "phi0":phi, "r0":r0, "spiral_angle":angle, "linestyle":"--", "colour":"grey", "label":""
         } for phi in phi0_list]
     phi_mag_list = []
-    mag_length = 10+2.13*2+0.05*2/(2*math.pi*3.6)*360
+    mag_length = 4.5+2.5+3.65+1.92*2+0.05*2/(2*math.pi*3.6)*360
     print("MAG LENGTH", mag_length, "degree")
     for i, phi0 in enumerate(phi0_list[::2]):
         phi_mean = (phi0_list[2*i]+phi0_list[2*i+1])/2
@@ -115,7 +117,7 @@ def plot_azimuthal():
     disallowed_events = ["ID0"]
     plot.LoadOrbit.azimuthal_domain = angle_domain
     plot.LoadH5.azimuthal_domain = angle_domain
-    test_function = lambda words: words[1]**2+words[3]**2 > (4.0)**2 or words[1]**2+words[3]**2 < (3.2)**2
+    test_function = lambda words: words[1]**2+words[3]**2 > (4.4)**2 or words[1]**2+words[3]**2 < (3.5)**2
     orbit_list = []
     for orbit_folder, name in orbit_folder_list:
         h5 = plot.LoadH5(os.path.join(orbit_folder, probe_files))
@@ -141,6 +143,10 @@ def plot_azimuthal():
         if "$r_0\\phi$" in axes.get_xlabel():
             continue
         axes.grid(True)
+        xlim = axes.get_xlim()
+        axes.plot(xlim, [4.4, 4.4], color="grey", linestyle="dashed")
+        axes.set_xlim(xlim)
+        axes.set_ylim([3.5, 4.5])
     figname = os.path.join(base_dir, job_name+".png")
     figure.savefig(figname)
     print("Figure saved as", figname)

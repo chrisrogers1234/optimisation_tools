@@ -17,6 +17,7 @@ import xboa.hit
 
 from optimisation_tools.opal_tracking import OpalTracking
 from optimisation_tools.opal_tracking import G4BLTracking
+from optimisation_tools.opal_tracking import BDSIMTracking
 from optimisation_tools.opal_tracking import StoreDataInMemory
 from optimisation_tools.opal_tracking import PyOpalTracking
 from optimisation_tools.opal_tracking import PyOpalTracking2
@@ -149,10 +150,20 @@ def will_do_python(config):
     return config.tracking["opal_path"] == "python"
 
 def setup_tracking(config, probes, ref_energy):
-    if config.tracking["opal_path"] == None:
-        return setup_tracking_g4bl(config, probes, ref_energy)
-    if will_do_python(config):
+    if "tracking_code" not in config.tracking:
+        raise KeyError("Please use config.tracking['tracking_code']")
+    if config.tracking["tracking_code"] == "pyopal":
         return setup_py_tracking_2(config, probes, ref_energy)
+    elif config.tracking["tracking_code"] == "g4bl":
+        return setup_tracking_g4bl(config, probes, ref_energy)
+    elif config.tracking["tracking_code"] == "bdsim":
+        return setup_tracking_bdsim(config, probes, ref_energy)
+    elif config.tracking["tracking_code"] == "opal":
+        return setup_tracking_opal(config, probes, ref_energy)
+    else:
+        raise ValueError(f"Did not recognise tracking code {config.tracking['tracking_code']}")
+
+def setup_tracking_opal():
     ref_hit = reference(config, ref_energy)
     opal_exe = os.path.expandvars(config.tracking["opal_path"])
     lattice = config.tracking["lattice_file_out"]
@@ -180,6 +191,20 @@ def setup_tracking_g4bl(config, outfiles, ref_energy):
     tracking.verbose = config.tracking["verbose"]
     tracking.flags = config.tracking["flags"]
     tracking.clear_path = config.tracking["clear_files"]
+    tracking.pass_through_analysis = StoreDataInMemory(config)
+    return tracking
+
+def setup_tracking_bdsim(config, outfiles, ref_energy):
+    ref_hit = reference(config, ref_energy)
+    bdsim_exe = os.path.expandvars(config.tracking["bdsim_path"])
+    lattice = config.tracking["lattice_file_out"]
+    log = config.tracking["tracking_log"]
+    beam = config.tracking["beam_file_out"]
+    tracking = BDSIMTracking(lattice, beam, ref_hit, outfiles, bdsim_exe, log)
+    tracking.verbose = config.tracking["verbose"]
+    tracking.flags = config.tracking["flags"]
+    tracking.clear_path = config.tracking["clear_files"]
+    tracking.station_to_z_dict = dict([(i, i*100) for i in range(101)])
     tracking.pass_through_analysis = StoreDataInMemory(config)
     return tracking
 
@@ -481,5 +506,3 @@ def scale_2(x_in, xp_in, ke_in, ke_out, k, tan_delta, pid = 2212):
     print(ke_out, hit_out["kinetic_energy"])
     print(hit_out["x"], hit_out["x'"])
     return hit_out["x"], hit_out["x'"]
-
-

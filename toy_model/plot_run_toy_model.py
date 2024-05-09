@@ -16,12 +16,15 @@ class DataHandler(object):
 
     def load_output_list(self):
         dir_name_list = glob.glob(self.dir_name_glob)
+        print("Globbing", self.dir_name_glob, "gives", len(dir_name_list), "files")
         self.output_list = []
         for item in dir_name_list: 
             self.output_list += self.load_run_summary(item)
         print("Loaded "+str(len(self.output_list))+" files with keys")
         for key in sorted(self.output_list[0].keys()):
             print(key)
+        for key in sorted(self.output_list[0]['config'].keys()):
+            print("    config", key)
         self.muggle_data()
 
     def load_output(self):
@@ -69,7 +72,14 @@ class DataHandler(object):
         return False
 
     def get_key(self, item):
-        key = [item[sort_key] for sort_key in self.sort_key_list]
+        key = []
+        for sort_key in self.sort_key_list:
+            if callable(sort_key):
+                key.append(sort_key(item))
+            elif sort_key in item:
+                key.append(item[sort_key])
+            else:
+                key.append(item['config'][sort_key])
         return key
 
     def muggle_data(self):
@@ -95,7 +105,7 @@ class DataHandler(object):
                 item_key = self.get_key(item)
                 if not self.is_different(key, item_key):
                     data_set.append(item)
-            data_set = sorted(data_set, key = lambda x: x[self.x_key])
+            data_set = sorted(data_set, key = self.get_key)
             data_set_list.append(data_set)
 
         self.output_list = data_set_list
@@ -103,8 +113,8 @@ class DataHandler(object):
 class Plotter(object):
     def __init__(self, sort_key_list, sort_name_list, sort_unit_list, x_key):
         self.x_key = x_key
-        self.sort_key = sort_key_list
-        self.colors = ['b', 'g', 'xkcd:slate', 'xkcd:pinkish']
+        self.sort_key_list = sort_key_list
+        self.colors = ['b', 'g', 'xkcd:slate', 'xkcd:pinkish', 'orange',]# 'r']
         self.xlabel = "Number of turns"
         self.ylabel = "Foil hits"
         self.y_keys = ["mean_foil_hits", "max_foil_hits"] # can also be a list of functions
@@ -120,6 +130,14 @@ class Plotter(object):
         except Exception:
             sys.excepthook(*sys.exc_info())
 
+    def get_value(self, data, key):
+        if callable(key):
+            return key(data)
+        elif key in data:
+            return data[key]
+        else:
+            return data['config'][key]
+
     def do_plots_(self, data_set_list, do_log, print_data):
         fig = matplotlib.pyplot.figure()
         axes = fig.add_subplot(1, 1, 1, position=[0.15, 0.1, 0.82, 0.85])
@@ -127,17 +145,14 @@ class Plotter(object):
         axes.set_ylabel(self.ylabel)
         for i, data_set in enumerate(data_set_list):
             color = self.color(i)
-            sort_value = [data_set[0][key] for key in self.sort_key]
-            x_values = [data[self.x_key] for data in data_set]
+            sort_value = [self.get_value(data_set[0], key) for key in self.sort_key_list]
+            x_values = [self.get_value(data, self.x_key) for data in data_set]
             if print_data:
                 print(self.x_key, x_values)
 
             for j, y_key in enumerate(self.y_keys):
-                linestyle = self.linestyles[j]
-                if callable(y_key):
-                    y_values = [y_key(data) for data in data_set]
-                else:
-                    y_values = [data[y_key] for data in data_set]
+                linestyle = self.linestyle(i)
+                y_values = [self.get_value(data, y_key) for data in data_set]
                 if do_log:
                     func = axes.semilogy
                 else:
@@ -145,7 +160,7 @@ class Plotter(object):
                 if j == 0:
                     my_label = ""
                     for i, name in enumerate(self.sort_name):
-                        my_label += name+str(sort_value[i])+self.sort_units[i]
+                        my_label += f"{name} {sort_value[i]} {self.sort_units[i]}"
                 else:
                     my_label = None
                 func(x_values, y_values, color=color, linestyle=linestyle, label=my_label)
@@ -160,6 +175,14 @@ class Plotter(object):
         i %= len(self.colors) 
         return self.colors[i]
 
+    def linestyle(self, i):
+        j = int(i/len(self.colors))
+        j %= len(self.linestyles)
+        style = self.linestyles[j]
+        print(style, j, i)
+        return style
+
+
 def last_turn_hit(data):
     hits_per_turn = data["hits_per_turn"]
     n_lost = data["n_outside_acceptance"]
@@ -171,11 +194,12 @@ def last_turn_hit(data):
         last_turn -= 1
     return last_turn*1.0/len(hits_per_turn)
 
-def plots(data_set_list, out_dir, sort_key_list, sort_name_list, sort_unit_list, x_key):
+def plots(data_set_list, out_dir, sort_key_list, sort_name_list, sort_unit_list, x_key, n_colours):
     plotter = Plotter(sort_key_list, sort_name_list, sort_unit_list, x_key)
+    plotter.colors = plotter.colors[:n_colours]
 
     plotter.out_dir = out_dir+"/"
-    plotter.xlabel = "$\\varepsilon_{inj}$ [$\\mu$m]"
+    plotter.xlabel = "number of injection turns"
 
     plotter.ylabel = "Foil hits"
     plotter.y_keys = ["mean_foil_hits", "max_foil_hits"]
@@ -196,12 +220,12 @@ def plots(data_set_list, out_dir, sort_key_list, sort_name_list, sort_unit_list,
 
     plotter.ylabel = "$\\sigma$(dp/p)"
     plotter.y_keys = ["rms_dp_over_p", "dp_over_p_1e-2"]
-    plotter.y_lim = [0.001, 0.010]
+    plotter.y_lim = [0.001, 0.050]
     plotter.file_name = "dp_over_p_rms.png"
     plotter.do_plots(data_set_list, True)
 
     plotter.ylabel = "Correlation"
-    plotter.y_lim = [-1.0, 0.0]
+    plotter.y_lim = [-1.0, 1.0]
     plotter.y_keys = [lambda x: x["amplitude_u_v_corr"][0][1]]
     plotter.file_name = "amplitude_correlation.png"
     plotter.do_plots(data_set_list, False)
@@ -211,6 +235,21 @@ def plots(data_set_list, out_dir, sort_key_list, sort_name_list, sort_unit_list,
     plotter.y_keys = [lambda x: x["n_outside_acceptance"]*1.0/x["n_events"] ]
     plotter.file_name = "loss.png"
     plotter.do_plots(data_set_list, False)
+
+    plotter.ylabel = "Fractional loss (longitudinal)"
+    plotter.y_lim = [0.0, 0.2]
+    plotter.y_keys = [lambda x: x["n_outside_acceptance_long"]*1.0/x["n_events"] ]
+    plotter.file_name = "loss_long.png"
+    plotter.do_plots(data_set_list, False)
+
+    plotter.ylabel = "Fractional loss (transverse)"
+    plotter.y_lim = [0.0, 0.2]
+    plotter.y_keys = [lambda x: x["n_outside_acceptance_trans"]*1.0/x["n_events"] ]
+    plotter.file_name = "loss_trans.png"
+    plotter.do_plots(data_set_list, False)
+
+    return
+    # these are only available for optimiser
 
     plotter.ylabel = "99.9 % range for dp/p"
     plotter.y_keys = ["dp_over_p_1e-3_range"]
@@ -239,14 +278,18 @@ def plots(data_set_list, out_dir, sort_key_list, sort_name_list, sort_unit_list,
 
 
 def main():
-    dir_base = "output/arctan_baseline/toy_model/horizontal-injection-on-p_v2/"
+    dir_base = "output/2023-03-01_baseline/toy_model_painting_v18"
     file_glob = dir_base
     out_dir = dir_base+"/"
     #file_glob = "output/triplet_baseline/single_turn_injection/toy_model_2/*/run_summary.json"
-    sort_key_list = ["number_pulses", "target_emittance", "foil_column_density"]
-    sort_name_list = [" $n_{inj}$ ", " $A_{tgt}$ ", " $\\rho_{tgt}$ "]
-    sort_unit_list = ["", "$\\mu$m", "g cm$^{-2}$"]
-    x_key = "pulse_emittance"
+#    sort_key_list = [lambda x: x["config"]["is_correlated"], "amplitude_acceptance"]
+#    sort_name_list = ["Corr:", "Acceptance"]
+#    sort_unit_list = ["", "$\\mathrm{\\mu}$m"]
+    sort_key_list = [lambda x: x["config"]["is_correlated"], "rf_voltage"]
+    sort_name_list = ["Corr:", "V$_{rf}$"]
+    sort_unit_list = ["", "MV"]
+    n_colours = 2
+    x_key = "number_pulses"
 
     data_handler = DataHandler(file_glob, sort_key_list, x_key)
     data_handler.load_output_list()
@@ -254,7 +297,7 @@ def main():
     #output_list = data_handler.output_list[2:4]
     #out_dir = dir_base+"/foil/"
     output_list = data_handler.output_list
-    plots(output_list, out_dir, sort_key_list, sort_name_list, sort_unit_list, x_key)
+    plots(output_list, out_dir, sort_key_list, sort_name_list, sort_unit_list, x_key, n_colours)
 
 if __name__ == "__main__":
     main()

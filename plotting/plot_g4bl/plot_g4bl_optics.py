@@ -13,25 +13,53 @@ from xboa.bunch import Bunch
 from xboa.hit import Hit
 import xboa.common
 
+import optimisation_tools.opal_tracking
 from optimisation_tools.utils import utilities
 from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransferMatrix
 
 DecoupledTransferMatrix.det_tolerance = 1
 
 class PlotG4BL(object):
-    def __init__(self, run_dir_glob, co_file, cell_length, target_subs, reference_file, reference_file_format, plot_dir, max_score):
+    def __init__(self, run_dir_glob, co_file, cell_length, target_subs, beam_file_name, file_format, plot_dir, max_score):
         self.plot_dir = plot_dir
         self.co_data = []
         self.cell_length = cell_length
         self.target_subs = target_subs # list of subs
         self.pick_list = []
         self.tracking = []
-        self.load_data(run_dir_glob, co_file, reference_file, reference_file_format)
+        self.station_to_z_dict = None
+        self.file_format = file_format
+        self.beam_file_name = beam_file_name
+        self.co_file = co_file
+        self.run_dir_glob = run_dir_glob
+        self.max_score = max_score
+
+    def load(self):
+        if "root" in self.file_format:
+            optimisation_tools.opal_tracking.import_bdsim_definitions()
+            import ROOT
+        self.load_data(self.run_dir_glob, self.co_file, self.beam_file_name, self.file_format)
         self.parse_substitutions() # check for variables and sort the list
         self.pick_substitutions()
-        self.filter_data(max_score) # if max_score, reject data with data["errors"] > max_score
+        self.filter_data() # if max_score, reject data with data["errors"] > max_score
         self.colors =  ["C"+str(i) for i in range(len(self.co_data))]
-        utilities.clear_dir(plot_dir)
+        utilities.clear_dir(self.plot_dir)
+
+    def load_bunch(self, file_name, reference_file_format):
+        if reference_file_format == "g4bl_track_file":
+            bunch_list = Bunch.new_list_from_read_builtin(reference_file_format, file_name)
+        elif reference_file_format == "bdsim_root_file":
+            analysis = optimisation_tools.opal_tracking.StoreDataInMemory()
+            analysis.coordinate_transform = analysis.coord_dict["none"]
+            analysis.dt_tolerance = -1
+            analysis.station_dt_tolerance = -1
+            optimisation_tools.opal_tracking.BDSIMTracking.read_files([file_name], analysis, self.station_to_z_dict, verbose=5)
+            hit_list_of_lists = analysis.finalise()
+            hits_by_station = analysis.sort_by_station(hit_list_of_lists)
+            bunch_list = [Bunch.new_from_hits(hit_list) for hit_list in hits_by_station]
+        else:
+            raise RuntimeError(f"did not recognise file format {reference_file_format}")
+        return bunch_list
 
     def load_data(self, run_dir_glob, co_file, reference_file, reference_file_format):
         globble = []
@@ -44,15 +72,16 @@ class PlotG4BL(object):
             raise RuntimeError("Failed to glob from", run_dir_glob)
         for a_dir in sorted(globble):
             new_co_data = []
-            reference_data_glob = sorted(glob.glob(os.path.join(a_dir, reference_file)))
+            a_file_glob = os.path.join(a_dir, reference_file)
+            reference_data_glob = sorted(glob.glob(a_file_glob))
             for i, file_name in enumerate(reference_data_glob):
-                new_co_data.append({"bunch_list":Bunch.new_list_from_read_builtin(reference_file_format, file_name)})
+                new_co_data.append({"bunch_list":self.load_bunch(file_name, reference_file_format)})
             co_file_name = os.path.join(a_dir, co_file)
             try:
                 fin = open(co_file_name)
                 co_data = json.loads(open(co_file_name).read())
                 if len(co_data) != len(new_co_data):
-                    raise ValueError("Found", len(co_data), "transfer maps and", len(new_co_data), "reference outputs in", co_file_name)
+                    raise ValueError(f"Found {len(co_data)} transfer maps and {len(new_co_data)} reference outputs in {co_file_name}")
                 for i, co in enumerate(co_data):
                     new_co_data[i].update(co)
                     print("  closed orbit", co["seed"])
@@ -93,14 +122,14 @@ class PlotG4BL(object):
                     self.pick_list.append(i)
                     break
 
-    def filter_data(self, max_score):
-        if not max_score:
+    def filter_data(self):
+        if not self.max_score:
             return
         co_data_tmp = []
         for data in self.co_data:
             if "errors" not in data:
                 continue
-            if sum(data["errors"]) < max_score:
+            if sum(data["errors"]) < self.max_score:
                 co_data_tmp.append(data)
         self.co_data = co_data_tmp
 
@@ -195,22 +224,27 @@ class PlotG4BL(object):
                 if self.check_stability(data):
                     ref_tm = DecoupledTransferMatrix(self.get_tm(data["tm"]))
                     beta_0_list.append(ref_tm.get_beta(0))
-                    z_list, disp_x_list, disp_y_list = self.get_dispersion(data_low, data_high)
+                    try:
+                        z_list, disp_x_list, disp_y_list = self.get_dispersion(data_low, data_high)
+                    except (IndexError, RuntimeError):
+                        z_list, disp_x_list, disp_y_list = [None], [None], [None]
                     disp_0_list.append(disp_x_list[0])
                     disp_1_list.append(disp_y_list[0])
                 else:
-                    beta_0_list.append(0.0)
-                    disp_0_list.append(0.0)
-                    disp_1_list.append(0.0)
+                    beta_0_list.append(None)
+                    disp_0_list.append(None)
+                    disp_1_list.append(None)
                 x_list.append(data["substitutions"][var_key])
 
-            axes.plot(x_list, beta_0_list, label=label)
+            axes.plot(x_list, beta_0_list, label="$\\beta_\\perp$")
             axes.set_xlabel(self.key_subs[var_key]+" "+self.units_subs[var_key])
             axes.set_ylabel("$\\beta$ [mm]")
             axes2 = axes.twinx()
-            axes2.plot(x_list, disp_0_list, '--', label=label)
+            axes2.plot(x_list, disp_0_list, '--', label="D$_x$ ")
+            axes2.plot(x_list, disp_1_list, ':', label="D$_y$ ")
             axes2.set_xlabel(self.key_subs[var_key]+" "+self.units_subs[var_key])
-            axes2.set_ylabel("$D(x)$ [mm]")
+            axes2.set_ylabel("Dispersion [mm]")
+            figure.legend(loc=(0.15, 0.15))
         figure.savefig(os.path.join(self.plot_dir, self.short_form[var_key]+"_vs_beta.png"))
 
     def plot_var(self):
@@ -310,6 +344,7 @@ class PlotG4BL(object):
 
     def plot_beam_init(self):
         print("Found", len(self.tracking), "bunches")
+        labels = {"x":"x [mm]", "y":"y [mm]", "px":"p$_x$ [MeV/c]", "py":"p$_y$ [MeV/c]", "p":"p [MeV/c]"}
         for x_var, y_var in ("x", "p"), ("y", "p"), ("px", "p"), ("py", "p") :
             figure = matplotlib.pyplot.figure()
             axes = figure.add_subplot(1, 1, 1)
@@ -325,10 +360,10 @@ class PlotG4BL(object):
                 hit = bunch_list[0].get_hits("event_number", 1)[0]
                 co_x_list.append(hit[x_var])
                 co_y_list.append(hit[y_var])
-            axes.hist2d(x_list+co_x_list, y_list+co_y_list, bins=[100, 100])#, s=1, c="black")
+            #axes.hist2d(x_list+co_x_list, y_list+co_y_list, bins=[100, 100])#, s=1, c="black")
             axes.scatter(co_x_list, co_y_list, c="r")
-            axes.set_xlabel(x_var)
-            axes.set_ylabel(y_var)
+            axes.set_xlabel(labels[x_var])
+            axes.set_ylabel(labels[y_var])
             figure.savefig(os.path.join(self.plot_dir, f"beam_init_{x_var}_vs_{y_var}.png"))
 
     def plot_reference_z(self):
@@ -364,8 +399,12 @@ class PlotG4BL(object):
                 "by":[hit["by"]*10/tesla for hit in ref_list if hit["z"] <= z_max],
                 "bz":[hit["bz"]/tesla for hit in ref_list if hit["z"] <= z_max],
             }
+            plot_list = [("bx", "dashed", "B$_{x}$ [0.1 T]"), ("by", "dotted", "B$_{y}$ [0.1 T]"), ("bz", "solid", "B$_{z}$ [T]")]
+            if self.ref_bz:
+                b_list["bz_ref"] = [self.ref_bz.get_field(hit["z"]) for hit in ref_list if hit["z"] <= z_max]
+                plot_list.append(("bz_ref", "solid", "Ref B$_{z}$ [T]"))
             if i == 0:
-                for var, linestyle, y_label in [("bx", "dashed", "B$_{x}$ [0.1 T]"), ("by", "dotted", "B$_{y}$ [0.1 T]"), ("bz", "solid", "B$_{z}$ [T]")]:
+                for var, linestyle, y_label in plot_list:
                     axes2.plot(z_list, b_list[var], label=y_label, linestyle=linestyle, c="black")
             for var, linestyle in [("bx", "dashed"), ("by", "dotted"), ("bz", "solid")]:
                 if var == "bz":
@@ -416,7 +455,7 @@ class PlotG4BL(object):
         dp = (data_high["ref_track"][0]["pz"]-data_low["ref_track"][0]["pz"])
         i_list = range(len(data_high))
         dx_list = [data_high["ref_track"][i]["x"]-data_low["ref_track"][i]["x"] for i in i_list]
-        dy_list = [data_high["ref_track"][i]["x"]-data_low["ref_track"][i]["x"] for i in i_list] 
+        dy_list = [data_high["ref_track"][i]["y"]-data_low["ref_track"][i]["y"] for i in i_list]
         z_list = [data_high["ref_track"][i] for i in i_list]
         dispx_list = [dx*p0/dp for dx in dx_list]
         dispy_list = [dy*p0/dp for dy in dy_list]
@@ -496,6 +535,7 @@ class PlotG4BL(object):
             "__energy__":None,
             "__wedge_opening_angle__":"$\\theta_{wedge}$",
             "__n_cells__":None,
+            "__dp_pos__":None,
     }
     units_subs = {
             "__coil_radius__":"[mm]",
@@ -519,23 +559,36 @@ class PlotG4BL(object):
     l_size = 14
     f_size = 20
 
+class RefBz():
+    def __init__(self, b1, b2, length):
+        self.b1 = b1
+        self.b2 = b2
+        self.length = length
+
+    def get_field(self, z):
+        return self.b1*math.sin(2.*math.pi*z/self.length)+self.b2*math.sin(4.*math.pi*z/self.length)
+
 def main():
-    run_dir = "output/ruihu_cooling_v5/"
-    dp_str = "pmmp"
-    dipz = "0.1"
-    run_dir_glob = [f"{run_dir}/stage1_dp={dp_str}_pz=*_dipz={dipz}",]
-    plot_dir = run_dir+"/"+dp_str+"_dipz="+dipz+"_plots/"
+    version = "2024-04-16"
+    run_dir = "output/demo_v20/"
+    by = "0.0"
+    polarity = "++++"
+
+    run_dir_glob = [f"{run_dir}/pz=*_by={by}_polarity={polarity}*",]
+    plot_dir = run_dir+f"/{version}_optics_plots_by={by}_polarity={polarity}/"
     target_pz = [{"__momentum__":mom} for mom in [0.19, 0.200, 0.210]]
 
-    #run_dir_glob = [run_dir+"by=0.05_pz=?00/", run_dir+"by=0.05_pz=60/"]
-    #plot_dir = run_dir+"/scan_plots_momentum_restricted/"
-    file_name = "tmp/find_closed_orbits/output*.txt"
+    file_name = "tmp/find_closed_orbits/output-1.root"
     co_file_name = "closed_orbits_cache"
     cell_length = 4600.0 # full cell length
     file_format = "icool_for009"
+    file_format = "bdsim_root_file"
     plotter = PlotG4BL(run_dir_glob, co_file_name, cell_length, target_pz, file_name, file_format, plot_dir, 1e9)
-    plotter.load_beam_file("lattice/ruihu/beam_stage1.beam", "g4beamline_bl_track_file")
+    plotter.ref_bz = RefBz(7/0.8, 1/0.8, 800)
     plotter.beta_limit = 1e3
+    plotter.station_to_z_dict = dict([(i, i*100) for i in range(101)])
+    plotter.load()
+    plotter.load_beam_file("lattice/ruihu/beam_stage1.beam", "g4beamline_bl_track_file")
     plotter.do_plots()
     print("Wrote output to", plot_dir)
 

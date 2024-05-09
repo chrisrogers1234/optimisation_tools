@@ -30,6 +30,7 @@ import h5py
 
 from xboa import common
 from xboa.hit import Hit
+from xboa.bunch import Bunch
 
 from xboa.tracking import TrackingBase 
 
@@ -108,7 +109,7 @@ class StoreDataInMemory(object):
 
 
     def dt_cut(self, hit_list_of_lists):
-        if self.dt_tolerance == None:
+        if self.dt_tolerance == None or self.dt_tolerance <= 0.0:
             return hit_list_of_lists
         tmp_hit_list_of_lists = []
         cut_count = 0
@@ -132,7 +133,7 @@ class StoreDataInMemory(object):
 
     def reallocate_stations_old(self, list_of_list_of_hits):
         # this looks buggy, replaced with reallocate_stations below
-        if self.station_dt_tolerance <= 0.0:
+        if self.station_dt_tolerance is None or self.station_dt_tolerance <= 0.0:
             return list_of_list_of_hits
         max_station = [max([hit['station'] for hit in hit_list]) for hit_list in list_of_list_of_hits]
         max_station = max(max_station)+1
@@ -183,6 +184,17 @@ class StoreDataInMemory(object):
                     hit[key_out] = hit_copy[key_in]
                 hit.mass_shell_condition("energy")
         return hit_list_of_lists
+
+    @classmethod
+    def sort_by_station(cls, hit_list_of_lists):
+        hit_list = []
+        for event_hit_list in hit_list_of_lists:
+            hit_list += event_hit_list
+        bunch = Bunch.new_from_hits(hit_list)
+        bunch_dict = bunch.split("station")
+        hit_list_of_lists = [bunch_dict[ev].hits() for ev in bunch_dict.keys()]
+        return hit_list_of_lists
+
 
     def finalise(self):
         # convert from a dict of list of hits to a list of list of hits

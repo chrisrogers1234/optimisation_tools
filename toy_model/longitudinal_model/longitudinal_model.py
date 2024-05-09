@@ -491,7 +491,7 @@ def main_frequency_ramp():
     program.setup(max_time)
     model.rf_program = program
     monitor = BeamMonitor()
-    output_directory = f"output/kurns_v4/hold_ramp_hold_{hold_time}_{ramp_time}_{hold_time}"
+    output_directory = f"output/longitudinal/kurns_1/hold_ramp_hold_{hold_time}_{ramp_time}_{hold_time}"
     utilities.clear_dir(output_directory)
 
     turn_action = TurnAction(program, monitor, model, plot_contours=True)
@@ -523,7 +523,7 @@ def main_constant_bucket(energy, energy_spread, rf_voltage, nominal_rf_energy, r
     model.rf_program = program
     model.r0 = r0_actual
     monitor = BeamMonitor()
-    output_directory = f"output/kurns_v4/{output_dir}"
+    output_directory = f"output/longitudinal_model/{output_dir}"
     utilities.clear_dir(output_directory)
 
     turn_action = TurnAction(program, monitor, model, plot_contours=True)

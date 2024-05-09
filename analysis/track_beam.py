@@ -356,6 +356,7 @@ class Recycle(BeamGen):
             tracking = self.tracking_store[setting_name]
         hit_list = [hit_list[station] for hit_list in self.last_tracking if station < len(hit_list)]
         hit_list = self.offset(hit_list)
+        hit_list = self.override(hit_list)
         return hit_list
  
     def offset(self, hit_list):
@@ -366,7 +367,27 @@ class Recycle(BeamGen):
         for hit in hit_list:
             for key, value in offset.items():
                 hit[key] += value 
+            if "p"  in offset.keys() or "energy" in offset.keys() or "kinetic_energy" in offset.keys():
+                hit.mass_shell_condition("pz")
+            elif "px" in offset.keys() or "py" in offset.keys() or "pz" in offset.keys():
+                hit.mass_shell_condition("energy")
+            elif "mass" in offset.keys():
+                raise KeyError("Can't put a mass offset (use override)")
         return hit_list
+
+    def override(self, hit_list):
+        if "override" not in self.beam:
+            return hit_list
+        override_ = self.beam["override"]
+        for hit in hit_list:
+            for key, value in override_.items():
+                hit[key] = value
+            if "p"  in override_.keys() or "energy" in override_.keys() or "kinetic_energy" in override_.keys():
+                hit.mass_shell_condition("pz")
+            elif "px" in override_.keys() or "py" in override_.keys() or "pz" in override_.keys() or "mass" in override_.keys():
+                hit.mass_shell_condition("energy")
+        return hit_list
+
 
     @classmethod
     def store_tracking(cls, name, tracks):

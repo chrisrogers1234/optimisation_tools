@@ -1,6 +1,7 @@
 import json
 import math
 import copy
+import os
 
 import numpy.polynomial # hermite polynomials
 import xboa.common
@@ -224,6 +225,7 @@ class Material(object):
         cls.materials_file = file_name
 
     m_e = constants.get_mass(11)
-    materials_file = "/home/cr67/OPAL/external_rogers_mint/install/lib/optimisation_tools/share/foil/materials.json"
+    materials_file = os.path.split(__file__)[0]+"/../../share/foil/materials.json"
+    #materials_file = "/home/cr67/OPAL/external_rogers_mint/install/lib/optimisation_tools/share/foil/materials.json"
     e_r = constants.rydberg_energy*constants.get_mass(9900010010010)/constants.get_mass(11)
 
