@@ -29,7 +29,7 @@ class PlotG4BL(object):
         self.px_range = [-80.0, 80.0]
         self.x_range = [-100.0, 100.0]
         self.pz_range = [1.0, 250.0]
-        self.e_range = [200.0, 250.0]
+        self.e_range = [180.0, 280.0]
         self.ct_range = [-300.0, 300.0]
         self.z_range = [None, None]
         self.file_format = file_format
@@ -41,7 +41,7 @@ class PlotG4BL(object):
 
     def plot_name(self, a_file):
         fname = a_file.split("/")[2]
-        fname = fname.split("_")
+        fname = fname.split(";_")
         plot_name = ""
         reverse_dict = {v:k for k, v in self.short_form.items()}
         for item in fname:
@@ -184,7 +184,7 @@ class PlotG4BL(object):
 
         figure = matplotlib.pyplot.figure()
         axes = figure.add_subplot(1, 1, 1)
-        axes.plot(z, emittance_xy)
+        axes.plot(z, emittance_xy, label="$\\varepsilon_{\\perp}$")
         #axes.set_ylim([0.0, axes.get_ylim()[1]])
         axes.set_xlabel("z [m]")
         axes.set_ylabel("$\\varepsilon_{\\perp}, \\varepsilon_{//}, $ [mm]")
@@ -204,7 +204,7 @@ class PlotG4BL(object):
         eps_str += "; $z_0=$"+str(round(parameters[1]))+" m"
         #axes.text(0.4, 0.84, eps_str, transform=axes.transAxes, color="blue")
         axes.plot(z, emittance_fit, linestyle="dashed", color="lightblue")
-        axes.plot(z, emittance_ct, c="r")
+        axes.plot(z, emittance_ct, c="r", label="$\\varepsilon_{//}$")
 
 
         try:
@@ -217,7 +217,7 @@ class PlotG4BL(object):
             parameters = [-99, -99, -99]
 
         axes = axes.twinx()
-        axes.plot(z, emittance_6d_alt, c="black")
+        axes.plot(z, emittance_6d_alt, c="black", label="$\\varepsilon_{6d}$")
         axes.set_ylabel("$\\varepsilon_{6d}$ [mm$^3$]")
         #axes.set_ylim([0.0, axes.get_ylim()[1]])
         eps_str = "$\\varepsilon^{eqm,1}_{//}=$"+str(round(parameters[0], 3))+" mm"
@@ -228,6 +228,7 @@ class PlotG4BL(object):
         trans_str = "Transmission: "+str(round(data["bunch_list"][0].bunch_weight()/len(data["bunch_list"][0])*100, 1))+" %"
         #axes.text(0.4, 0.68, trans_str, transform=axes.transAxes)
 
+        figure.legend()
         figure.savefig(self.plot_dir+"/emittance_vs_z.png")
         #matplotlib.pyplot.close(figure)
 
@@ -241,8 +242,8 @@ class PlotG4BL(object):
             figure = matplotlib.pyplot.figure(figsize=(20,10))
             figure.suptitle(data["plot_name"]+"\nz: "+str(bunch[0]['z']/xboa.common.units["m"])+" m; N: "+str(len(bunch)))
             axes = figure.add_subplot(2, 2, 1)
-            axes.scatter(my_vars[0], my_vars[1], c="orange")
-            axes.scatter(my_vars_cut[0], my_vars_cut[1])
+            axes.scatter(my_vars[0], my_vars[1])
+            axes.scatter(my_vars_cut[0], my_vars_cut[1], c="orange")
             axes.set_xlabel("x [mm]")
             axes.set_ylabel("p$_{x}$ [MeV/c]")
             axes.set_xlim(self.x_range)
@@ -329,11 +330,14 @@ class PlotG4BL(object):
         "__momentum__":"pz",
         "__coil_radius__":"r0",
         "__energy__":None,
-        "__wedge_opening_angle__":"wq",
+        "__wedge_opening_angle__":"wangle",
         "__dipole_polarity1__":"dp",
-        "__wedge_thickness__":"dt",
+        "__wedge_thickness__":"wthickness",
         "__version__":"version",
         "__polarity__":"polarity",
+        "__rf_phase__":"phis",
+        "__eps_t__":"eps_t",
+        "__eps_l__":"eps_l",
     }
     key_subs = {
             "__wedge_opening_angle__":"$\\theta_w$",
@@ -345,6 +349,9 @@ class PlotG4BL(object):
             "__wedge_thickness__":"Wedge Thickness",
             "__version__":"",
             "__polarity__":"",
+            "__rf_phase__":"$\\phi_s$",
+            "__eps_t__":"$\\varepsilon_{\\perp}$",
+            "__eps_l__":"$\\varepsilon_{//}$",
     }
     units_subs = {
             "__coil_radius__":"[mm]",
@@ -356,23 +363,33 @@ class PlotG4BL(object):
             "__wedge_thickness__":"[mm]",
             "__version__":"",
             "__polarity__":"",
+            "__rf_phase__":"[deg]",
+            "__eps_t__":"mm",
+            "__eps_l__":"meV s",
     }
     beta_limit = 4e3
     el_limit = 25
 
 def main():
-    run_dir = "output/demo_v20/"
+    pz = "200"
+    wt = "20"
+    wa = "10"
+    phi_s = "22"
+    by = "0.2"
+    eps_t = "2.0"
+    eps_l = "2.0"
+    run_dir = "output/demo_v25/"
     plot_dir = "emittance_plots/"
-    run_dir_glob = run_dir+"*_version=2022-11-01/"
-    file_name = "track_beam_amplitude/optics_low_emittance/output.txt"
+    run_dir_glob = run_dir+f"pz={pz}**eps_t={eps_t};_eps_l={eps_l};_*/"
+    file_name = "track_beam_amplitude/beam/output.txt"
     cell_length = 2000.0 # full cell length
     file_format = "icool_for009"
     plotter = PlotG4BL(run_dir_glob, file_name, file_format, plot_dir)
     plotter.analysis_list = None
     plotter.e_min = 0.0
     plotter.e_max = 270.0
-    plotter.z_range = [0, 105100]
-    plotter.max_station = 100
+    plotter.z_range = [20*1e3, 100*1e3] # [None, None]#
+    plotter.max_station = 5
     plotter.variables_of_interest = ["__dipole_field__", "__momentum__", "__wedge_opening_angle__"]
     plotter.do_plots()
 

@@ -46,7 +46,7 @@ class PlotG4BL(object):
         utilities.clear_dir(self.plot_dir)
 
     def load_bunch(self, file_name, reference_file_format):
-        if reference_file_format == "g4bl_track_file":
+        if reference_file_format in xboa.hit.Hit.file_types():
             bunch_list = Bunch.new_list_from_read_builtin(reference_file_format, file_name)
         elif reference_file_format == "bdsim_root_file":
             analysis = optimisation_tools.opal_tracking.StoreDataInMemory()
@@ -570,19 +570,19 @@ class RefBz():
 
 def main():
     version = "2024-04-16"
-    run_dir = "output/demo_v20/"
-    by = "0.0"
-    polarity = "++++"
+    run_dir = "output/demo_v23/"
+    by = "0.1"
+    polarity = "+--+"
 
     run_dir_glob = [f"{run_dir}/pz=*_by={by}_polarity={polarity}*",]
     plot_dir = run_dir+f"/{version}_optics_plots_by={by}_polarity={polarity}/"
     target_pz = [{"__momentum__":mom} for mom in [0.19, 0.200, 0.210]]
 
-    file_name = "tmp/find_closed_orbits/output-1.root"
+    file_name = "tmp/find_closed_orbits/output_1.txt"
     co_file_name = "closed_orbits_cache"
     cell_length = 4600.0 # full cell length
     file_format = "icool_for009"
-    file_format = "bdsim_root_file"
+    #file_format = "bdsim_root_file"
     plotter = PlotG4BL(run_dir_glob, co_file_name, cell_length, target_pz, file_name, file_format, plot_dir, 1e9)
     plotter.ref_bz = RefBz(7/0.8, 1/0.8, 800)
     plotter.beta_limit = 1e3

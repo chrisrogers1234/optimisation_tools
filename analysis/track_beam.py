@@ -84,10 +84,12 @@ class MVG(BeamGen): # Multivariate Gaussian
     def __init__(self, config, beam):
         self.config = copy.deepcopy(config)
         self.beam = beam
-        self.reference = beam["reference"]
         self.cov = None
+        self.reference = beam["reference"]
         self.n_particles = beam["n_particles"]
         self.load_closed_orbit(beam["closed_orbit_file"])
+        if self.reference == None:
+            self.reference = self.closed_orbits[0]["seed"] + [0.0, self.beam["energy"]*1e3]
 
     def get_cov(self, reference):
         """

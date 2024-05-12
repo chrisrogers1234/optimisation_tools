@@ -273,7 +273,7 @@ class PlotG4BL(object):
         "__cell_length__":"[mm]",
         "__coil_radius__":"[mm]",
         "__dipole_field__":"[T]",
-        "__momentum__":"[MeV/c]",
+        "__momentum__":"[GeV/c]",
         "__energy__":"",
     }
     beta_limit = 1e4
@@ -304,8 +304,8 @@ def do_plot(run_dir, pz, by, polarity, version):
 
 def main():
     run_dir = "output/demo_v23/"
-    pz = "*"
-    by = "0.1"
+    pz = "200"
+    by = "*"
     polarity = "+--+"
     version = "2024-04-16"
     do_plot(run_dir, pz, by, polarity, version)

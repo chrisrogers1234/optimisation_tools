@@ -31,13 +31,13 @@ class PlotG4BL(object):
         self.filter_data(max_score) # if max_score, reject data with data["errors"] > max_score
         self.colors =  ["C"+str(i) for i in range(len(self.co_data))]
         self.event_list = [i for i in range(12)]
-        self.e_lim = [-80.0, 300.0]
+        self.e_lim = [-80.0, 80.0]
         self.t_lim = [-0.5/self.frequency, 0.5/self.frequency]
         self.emit_long = [3.61*self.mm2eVms, 3.61*self.mm2eVms*3]
         self.min_n_hits = 90
         self.label = label
         self.max_t_offset = 2.0
-        self.will_plot_beam_ellipse = True
+        self.beam_ellipse_event = 3
         utilities.clear_dir(plot_dir)
 
     def load_data(self, run_dir_glob, co_file, reference_file, reference_file_format):
@@ -68,7 +68,7 @@ class PlotG4BL(object):
             self.co_data += new_co_data
 
     def load_bunch(self, file_name, reference_file_format):
-        if reference_file_format == "g4bl_track_file":
+        if reference_file_format in xboa.hit.Hit.file_types():
             bunch_list = Bunch.new_list_from_read_builtin(reference_file_format, file_name)
         elif reference_file_format == "bdsim_root_file":
             analysis = optimisation_tools.opal_tracking.StoreDataInMemory()
@@ -184,11 +184,11 @@ class PlotG4BL(object):
                     print(f"{hit['station']} {hit['event_number']} {hit['z']} {hit['t']} {hit['energy']}")
 
                 z_list = [hit["z"] for i, hit in enumerate(hit_list)]
-                t_list = [hit["t"] for i, hit in enumerate(hit_list)] #-ref_list[i]["t"]
-                e_list = [hit["energy"] for i, hit in enumerate(hit_list)] #-ref_list[i]["energy"]
-                z_list = [z for i, z in enumerate(z_list)]# if abs(t_list[i]) < 2]
-                e_list = [e for i, e in enumerate(e_list)]# if abs(t_list[i]) < 2]
-                t_list = [t for t in t_list] # if abs(t) < self.max_t_offset]
+                t_list = [hit["t"]-ref_list[i]["t"] for i, hit in enumerate(hit_list)]
+                e_list = [hit["energy"]-ref_list[i]["energy"] for i, hit in enumerate(hit_list)] #
+                z_list = [z for i, z in enumerate(z_list) if abs(t_list[i]) < self.max_t_offset]
+                e_list = [e for i, e in enumerate(e_list) if abs(t_list[i]) < self.max_t_offset]
+                t_list = [t for t in t_list if abs(t) < self.max_t_offset]
                 if len(t_list) > self.min_n_hits:
                     my_data.append({
                         "z_list":z_list,
@@ -210,11 +210,11 @@ class PlotG4BL(object):
                     axes3.scatter(item["t_list"], item["e_list"], c=[i for i in range(len(item["t_list"]))], s=2)
                 else:
                     axes3.scatter(item["t_list"], item["e_list"], c="xkcd:light grey",s=2)
-            if self.will_plot_beam_ellipse:
+            if self.beam_ellipse_event >= 0:
                 if len(my_data) > 2:
-                    self.plot_beam_ellipse(axes3, my_data[0]["t_list"], my_data[0]["e_list"], 8000)
+                    self.plot_beam_ellipse(axes3, my_data[self.beam_ellipse_event]["t_list"], my_data[self.beam_ellipse_event]["e_list"], 8000)
                 else:
-                    self.plot_beam_ellipse(axes3, my_data[0]["t_list"], my_data[0]["e_list"], 8000)
+                    self.plot_beam_ellipse(axes3, my_data[self.beam_ellipse_event]["t_list"], my_data[self.beam_ellipse_event]["e_list"], 8000)
 
         axes1.set_xlabel("z [mm]")
         axes1.set_ylabel("energy [MeV]")
@@ -249,24 +249,24 @@ class PlotG4BL(object):
 
 
 def main():
-    dt = "40"
-    n_rf = "3"
-    run_dir = "output/demo_v21/"
-    run_dir_glob = [run_dir+f"dt={dt}*n_cavities={n_rf}*/"]
-    run_dir_glob = [run_dir+f"pz=200*_version=2022*/"]
-    plot_dir = run_dir+"/plot_longitudinal_trajectory_"+dt+"_"+n_rf+"/"
+    dt = "20"
+    phi_s = "21"
+    by = "0.2"
+    dtheta = "5"
+    run_dir = "output/demo_v24/"
+    run_dir_glob = [run_dir+f"pz=200*_w_thickness={dt}_w_angle={dtheta}_rf_phase={phi_s}*by={by}_*version=2024*/"]
+    plot_dir = run_dir+"/plot_longitudinal_trajectory_"+dt+"/"
 
-    file_name = "track_beam_amplitude/longitudinal/output*.root"
+    file_name = "track_beam_amplitude/longitudinal/output.txt"
     co_file_name = "closed_orbits_cache"
     file_format = "icool_for009"
-    file_format = "bdsim_root_file"
     label = f""+str(datetime.datetime.now())
     plotter = PlotG4BL(run_dir_glob, co_file_name, file_name, file_format, plot_dir, 1e9, label)
     plotter.beta_limit = 1e4
-    plotter.event_list = [i for i in range(4)]
+    plotter.event_list = [i for i in range(10)]
     plotter.min_n_hits = 1
     plotter.max_t_offset = 100
-    plotter.will_plot_beam_ellipse = False
+    plotter.beam_ellipse_event = 3
     plotter.do_plots()
 
 
