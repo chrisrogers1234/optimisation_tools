@@ -4,6 +4,7 @@ import glob
 import os
 import sys
 
+import scipy.stats
 import numpy
 numpy.set_printoptions(linewidth=200)
 import matplotlib
@@ -28,16 +29,18 @@ class PlotG4BL(object):
         self.a_4d_max = 1e9
         self.max_score = max_score
         self.title = ""
-
+        self.n_a4d_bins = 40
         self.load_data(run_dir_glob, co_file, reference_file, reference_file_format)
 
     def load_data(self, run_dir_glob, co_file, reference_file, reference_file_format):
         for a_dir in sorted(glob.glob(run_dir_glob)):
             new_co_data = []
             reference_data_glob = sorted(glob.glob(os.path.join(a_dir, reference_file)))
+            if len(reference_data_glob) == 0:
+                print("Failed to find files from dir ", a_dir)
             for i, file_name in enumerate(reference_data_glob):
                 new_co_data.append({"bunch_list":Bunch.new_list_from_read_builtin(reference_file_format, file_name)})
-                print([len(bunch) for bunch in new_co_data[-1]["bunch_list"]])
+                print("   ... found ", len(new_co_data[-1]["bunch_list"][-1]), "in final bunch")
             co_file_name = os.path.join(a_dir, co_file)
             try:
                 fin = open(co_file_name)
@@ -50,6 +53,7 @@ class PlotG4BL(object):
                 sys.excepthook(*sys.exc_info())
                 print("Failed to load", co_file_name)
             self.co_data += new_co_data
+            print("Done", a_dir)
         if not len(self.co_data):
             print("Failed to find any files using: {0}".format(run_dir_glob))
 
@@ -101,6 +105,7 @@ class PlotG4BL(object):
         try:
             aa = tm.coupled_to_action_angle(seed)
         except (TypeError, numpy.linalg.LinAlgError):
+            sys.excepthook(*sys.exc_info())
             return
         aa[1] *= ref_hit["p"]/ref_hit["mass"]
         aa[3] *= ref_hit["p"]/ref_hit["mass"]
@@ -115,7 +120,6 @@ class PlotG4BL(object):
         self.plot_a4d_ratio(variables, a_4d_good, a_4d_all)
 
     def plot_phase_space(self, input_station, output_station):
-
         input_bunch, output_bunch = xboa.bunch.Bunch(), xboa.bunch.Bunch()
         a_4d_all = []
         a_4d_good = []
@@ -128,6 +132,7 @@ class PlotG4BL(object):
                     input_bunch = bunch
                 if bunch[0]["station"] == output_station:
                     output_bunch = bunch
+            print("    with", variables[-1], "found", len(input_bunch), "input events", len(output_bunch), "output events")
             good_events = [hit["event_number"] for hit in output_bunch]
 
             figure = matplotlib.pyplot.figure(figsize=(20,10))
@@ -142,7 +147,6 @@ class PlotG4BL(object):
             z_list = [hit["z"] for hit in output_bunch]
             axes.scatter(x_list, px_list, c="blue")
 
-            print("sigma_x", numpy.std(x_list), "sigma_px", numpy.std(px_list), "final_z", numpy.mean(z_list))
             axes.set_xlabel("x [mm]")
             axes.set_ylabel("p$_x$ [MeV/c]")
 
@@ -158,19 +162,21 @@ class PlotG4BL(object):
             axes.set_xlabel("y [mm]")
             axes.set_ylabel("p$_y$ [MeV/c]")
             try:
+                print(self.get_tm(data["tm"]))
                 tm = DecoupledTransferMatrix(self.get_tm(data["tm"]))
             except ValueError: # just try to plug on
-                sys.excepthook(*sys.exc_info())
-                print("Error for", data["variables"], "using last tm")
-            if tm is None:
-                a_4d_all.append([])
-                a_4d_good.append([])
-                continue
+                tm = None
+            if tm is None or tm.chol is None:
+                print("Error for", data["variables"], "using default tm")
+                tm = DecoupledTransferMatrix(self.default_tm)
+
             ref_hit = xboa.hit.Hit.new_from_dict(data["ref_track"][0])
 
             axes = figure.add_subplot(2, 2, 3)
             amplitude_list = [self.get_amplitude(hit, ref_hit, tm) for hit in input_bunch]
+            print("Amplitude list length", len(amplitude_list))
             amplitude_list = [a for a in amplitude_list if a != None]
+            print("Amplitude list length cutting None", len(amplitude_list))
             au_list = [aa[1] for aa in amplitude_list]
             av_list = [aa[3] for aa in amplitude_list]
             a_4d_all.append([aa[1]+aa[3] for aa in amplitude_list])
@@ -188,7 +194,7 @@ class PlotG4BL(object):
 
             name = [self.short_form[key]+"_"+str(data["substitutions"][key]) for key in self.variables_of_interest]
             figure.savefig(os.path.join(self.plot_dir, "input_station_"+"_".join(name)+".png"))
-            if len(matplotlib.pyplot.get_fignums()) > 5:
+            if len(matplotlib.pyplot.get_fignums()) > 0:
                 matplotlib.pyplot.close(figure)
         return variables, a_4d_good, a_4d_all
 
@@ -212,10 +218,62 @@ class PlotG4BL(object):
             title_str += self.key_subs[key]+" "+str(sub)+" "+self.units_subs[key]+"; "
         return title_str
 
+    def plot_beta(self, axes):
+        x_key = self.key_list[0]
+        x_list = []
+        y_list = []
+        for data in self.co_data:
+            x_list.append(data["variables"][x_key])
+            try:
+                tm = DecoupledTransferMatrix(self.get_tm(data["tm"]))
+                beta = tm.get_beta(0)
+            except Exception:
+                beta = 0.0
+            if beta < self.beta_limit:
+                y_list.append(beta)
+            else:
+                y_list.append(0.0)
+        axes.plot(x_list, y_list, "o-", label="Estimated $\\beta_{\\perp}$ [mm]", c="grey")
+        axes.set_ylabel("$\\beta_{\\perp}$ [mm]", fontsize=20)
+        axes.tick_params(labelsize=14)
+        axes.set_ylim(0, 4000.0)
+
+    def plot_eps_eqm(self, axes, centile):
+        x_key = self.key_list[0]
+        x_list = []
+        y_list = []
+        beta = 0.0
+        mass = xboa.common.pdg_pid_to_mass[13]
+        dedx = 0.1555 # LiH minimum ionising, MeV/mm
+        l_r = 970.9 # LiH radiation length, mm
+        mass = xboa.common.pdg_pid_to_mass[13]
+        if centile == None:
+            centile_amplitude = 4
+        else:
+            centile_amplitude = scipy.stats.chi2.ppf(centile, 4)
+        for data in self.co_data:
+            try:
+                tm = DecoupledTransferMatrix(self.get_tm(data["tm"]))
+                beta = tm.get_beta(0)
+            except:
+                pass
+            p = float(data["variables"]["__momentum__"])*1e3
+            beta_rel = p / (p**2+mass**2)**0.5
+            eps_eqm_const = 13.6**2/l_r/2/mass/dedx
+            eps_eqm = eps_eqm_const*beta/beta_rel
+            contour = eps_eqm*centile_amplitude
+            x_list.append(data["variables"][x_key])
+            y_list.append(contour)
+            print(centile, centile_amplitude, eps_eqm, contour)
+        label = "4 $\\times \\varepsilon_{eqm}$"
+        if not centile is None:
+            label = f"{centile*100} centile"
+        axes.plot(x_list, y_list, "o-", label = label)
+
     def plot_a4d_ratio(self, variables, a_4d_good, a_4d_all):
         max_a4d = max([max(a_4d) for a_4d in a_4d_all if len(a_4d)])
-        max_a4d = min(max_a4d, self.a_4d_max)
-        n_bins = 20
+        max_a4d = self.a_4d_max #min(max_a4d, self.a_4d_max)
+        n_bins = self.n_a4d_bins
         y_bins = [max_a4d/n_bins*i for i in range(n_bins+1)]
         if len(variables[0]) != 1:
             print(variables[0])
@@ -229,20 +287,20 @@ class PlotG4BL(object):
 
         x_value, y_value, weight = [], [], []
         for i, var in enumerate(a_variable):
-            print(i, len(a_4d_good), len(a_4d_all))
             good_hist = numpy.histogram(a_4d_good[i], y_bins)[0]
             all_hist = numpy.histogram(a_4d_all[i], y_bins)[0]
-            print(str(variables[i]).ljust(20), good_hist)
-            for j in range(20):
+            print("    with" , str(variables[i]).ljust(20), "got good tracks/bin:", good_hist, sum(good_hist), "of", sum(all_hist), "tracks")
+            print("                         all tracks/bin" , all_hist)
+            for j in range(n_bins):
                 x_value.append(var)
                 y_value.append(max_a4d*(j+0.5)/n_bins)
                 if all_hist[j]:
                     weight.append(good_hist[j]/all_hist[j])
                 else:
-                    weight.append(nan)
+                    weight.append(1.0)
         figure = matplotlib.pyplot.figure(figsize=(20,10))
         axes = figure.add_subplot(1, 1, 1)
-        hist = axes.hist2d(x_value, y_value, [x_bins, y_bins], weights=weight)
+        hist = axes.hist2d(x_value, y_value, [x_bins, y_bins], weights=weight, label="survival probability")
         axes.set_xlabel(self.key_subs[var_key]+" "+self.units_subs[var_key])
         axes.set_ylabel("A$_{4d}$ [mm]")
         axes.set_title("Survival probability\n"+self.get_title())
@@ -251,8 +309,18 @@ class PlotG4BL(object):
             if key == var_key:
                 continue
                 var = [data["substitutions"][key] for data in self.co_data]
+        self.plot_eps_eqm(axes, 0.99)
+        self.plot_eps_eqm(axes, None)
 
-        figure.colorbar(hist[3])
+        beta_axes = axes.twinx()
+        self.plot_beta(beta_axes)
+
+        cb = figure.colorbar(hist[3], pad=0.1)
+        cb.ax.tick_params(labelsize=14)
+        cb.set_label("Survival Probability", fontsize=20)
+        #cb.tick_params(labelsize=14)
+        axes.legend(loc="upper left")
+        beta_axes.legend(loc="center left")
         figure.savefig(os.path.join(self.plot_dir, "amplitude_ratio_"+self.short_form[var_key]+".png"))
 
     short_form = {
@@ -277,40 +345,60 @@ class PlotG4BL(object):
         "__energy__":"",
     }
     beta_limit = 1e4
+    default_tm = [[ 1.70949964e-01,  1.05529741e+02, -9.35191978e-06, -5.77306748e-03],
+                [-9.19815829e-03,  1.71516456e-01,  5.03190738e-07, -9.38291007e-06],
+                [ 9.35191978e-06,  5.77306748e-03,  1.70949964e-01,  1.05529741e+02],
+                [-5.03190738e-07,  9.38291007e-06, -9.19815829e-03,  1.71516456e-01]]
 
-def do_plot(run_dir, pz, by, polarity, version):
-    args = locals()
-    del args["run_dir"]
-    fname = ""
-    for key, value in args.items():
-        fname += key+"="+value+"_"
-    fname = fname[:-1]
-    title = fname.replace("_", " ")
-    plot_dir = run_dir+"/plot_dynamic_aperture_"
-    for key, value in args.items():
-        plot_dir += key+"="+value+"_"
-    plot_dir = plot_dir[:-1]
-    run_dir_glob = os.path.join(run_dir, fname)
-    file_name = "track_beam_amplitude/da_test//output*.txt"
+
+
+def fname(prefix, params, ignore_globs):
+    fname = f"{prefix}"
+    for key, value in params:
+        print(key, value)
+        if ignore_globs and ("*" in value or "?" in value):
+            continue
+        fname += f"{key}={value};_"
+    return fname[:-2]
+
+def do_plot(run_dir, args):
+    run_dir_glob = fname(run_dir, args, False)
+    title = run_dir_glob.replace(";_", " ")
+    title = title.split("/")[-1]
+    plot_dir = fname(run_dir+"/plot_amplitude_2_", args, True)
+    file_name = "track_beam_amplitude/da_scan//output*.txt"
     co_file_name = "closed_orbits_cache"
     cell_length = 1600.0 # full cell length
+    if "cell_length" in args:
+        cell_length = float(args["cell_length"])
     file_format = "icool_for009"
     plotter = PlotG4BL(run_dir_glob, co_file_name, cell_length, file_name, file_format, plot_dir, 40.0)
     plotter.title = title
     plotter.beta_limit = 1e4
-    plotter.variables_of_interest = ["__momentum__", "__dipole_field__"]
-    plotter.a_4d_max = 50
-    plotter.do_plots(1, 30)
+    plotter.variables_of_interest = ["__momentum__"]
+    plotter.a_4d_max = 160
+    plotter.n_a4d_bins = 20
+    plotter.do_plots(1, 20)
 
 def main():
-    run_dir = "output/demo_v23/"
-    pz = "200"
-    by = "*"
-    polarity = "+--+"
-    version = "2024-04-16"
-    do_plot(run_dir, pz, by, polarity, version)
+    run_dir = "output/demo_oct24_v2/"
+    cell_length = 2000
+    args = [
+        ("pz_beam", "*"),
+        ("harmonics", "(7.5)"), # , 3.0, 2.7
+        ("cell_length", "2000"),
+    ]
+    do_plot(run_dir, args)
 
 if __name__ == "__main__":
     main()
     matplotlib.pyplot.show(block=False)
     input("Press <CR> to finish")
+
+"""
+8.8388 0.0
+8.8164 0.6297
+8.75 1.25
+8.6426 1.852
+8.4988 2.4282
+"""

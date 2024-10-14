@@ -82,7 +82,7 @@ def toy_models_painting(angle_u, angle_v, a_dir, is_correlated, n_injection_turn
         "foil_column_density":foil,
         "output_dir":output_dir,
         "number_pulses":n_injection_turns,
-        "number_per_pulse":int(5000/n_injection_turns),
+        "number_per_pulse":int(100000/n_injection_turns),
         "closed_orbit":"output/2023-03-01_baseline/baseline/closed_orbits_cache",
         "injection_ellipse_algorithm":"transfer_matrix",
         "beta_x":2.0,
@@ -136,7 +136,7 @@ def main():
     #foil_n_turns_list = [(20e-6, n) for n in [50]]
     #toy_models = [toy for toy in toy_models_single_turn_injection(foil_n_turns_list, a_dir)]
 
-    a_dir = "output/2023-03-01_baseline/toy_model_painting_v18/"
+    a_dir = "output/2023-03-01_baseline/toy_model_painting_v20/"
     config_list = []
     for is_correlated in [False, True]:
         version = 1
@@ -146,7 +146,7 @@ def main():
                 amplitude_acceptance = amplitude_acceptance_i*0.005
                 for dp_i in range(0, 1, 2):
                     dp = (1+dp_i*1e-3)*75
-                    for n_injection_turns in range(10, 101, 10):
+                    for n_injection_turns in range(50, 101, 100):
                         version = n_injection_turns
                         config = {
                             "angle_u":math.pi/2,

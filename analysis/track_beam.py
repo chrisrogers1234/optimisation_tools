@@ -159,7 +159,13 @@ class BeamShells(BeamGen):
         if self.config.track_beam["do_decoupling"]:
             self.tm = DecoupledTransferMatrix(tm, True)
         else:
-            self.tm = TwoDTransferMatrix(tm, True)
+            try:
+                self.tm = TwoDTransferMatrix(tm, True)
+            except Exception:
+                if "default_tm" in self.config.track_beam:
+                    self.tm = TwoDTransferMatrix(self.config.track_beam["default_tm"], True)
+                else:
+                    raise
 
     def get_action(self, actions):
         dist = self.config.track_beam["amplitude_dist"]
@@ -247,11 +253,18 @@ class BeamShells(BeamGen):
 
 
     def gen_beam(self):
-        self.load_closed_orbit()
+        try:
+            self.load_closed_orbit()
+        except IOError:
+            if "default_co" in self.config.track_beam:
+                co = self.config.track_beam
+            else:
+                raise RuntimeError("Failed to load closed orbits and default closed orbit was not defined")
         hit_list = []
         for co in self.closed_orbits:
             self.get_mean(co)
             self.get_tm(co)
+            print("Loaded tm\n", self.tm)
             eigen_emittance_list = self.config.track_beam["eigen_emittances"]
             for actions in eigen_emittance_list:
                 aa_list = self.get_aa_list(actions) # action angle
@@ -406,11 +419,14 @@ class BeamFile(BeamGen):
         self.beam = beam
 
     def gen_beam(self):
-        fname = self.beam["filename"]
+        filename = self.beam["filename"]
         file_format = self.beam["format"]
         beam = xboa.bunch.Bunch.new_from_read_builtin(file_format, filename)
         hit_list = [hit for hit in beam]
+        if "n_events" in self.beam and self.beam["n_events"]:
+            hit_list = hit_list[:self.beam["n_events"]]
         hit_list = self.offset(hit_list)
+        hit_list = self.renumber(hit_list)
         return hit_list
 
     def offset(self, hit_list):
@@ -421,6 +437,15 @@ class BeamFile(BeamGen):
         for hit in hit_list:
             for key, value in offset.items():
                 hit[key] += value
+        return hit_list
+
+    def renumber(self, hit_list):
+        if "renumber" not in self.beam or not self.beam["renumber"]:
+            return
+        for i, hit in enumerate(hit_list):
+            hit["particle_number"] = 0
+            hit["event_number"] = i
+            hit["spill"] = 0
         return hit_list
 
     @classmethod

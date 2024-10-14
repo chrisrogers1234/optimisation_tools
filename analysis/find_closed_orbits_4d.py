@@ -30,6 +30,7 @@ class ClosedOrbitFinder4D(object):
         self.config = config
         self.config_co = config.find_closed_orbits
         self.energy = self.config.substitution_list[0]["__energy__"]
+        self.source_dir = os.getcwd()
         self.run_dir = os.path.join(self.config.run_control["output_dir"],
                                     self.config_co["run_dir"])
         self.centroid = None
@@ -44,11 +45,12 @@ class ClosedOrbitFinder4D(object):
         self.get_tracking(True)
 
     def get_tracking(self, clear):
-        self.here = os.getcwd()
         probes = self.config_co["probe_files"]
         if clear:
             utilities.clear_dir(self.run_dir)
+        os.chdir(self.run_dir)
         self.tracking = utilities.setup_tracking(self.config, probes, self.energy)
+        os.chdir(self.source_dir)
 
     def seed_to_hit(self, seed, t):
         hit = utilities.reference(self.config, self.energy)
@@ -93,16 +95,16 @@ class ClosedOrbitFinder4D(object):
         hit_list = []
         os.chdir(self.run_dir)
         self.subs_tracking = utilities.do_lattice(self.config, self.subs, overrides, [], self.tracking)
-        if self.config_co["use_py_tracking"]:
-            self.tracking = utilities.setup_py_tracking(self.config, self.run_dir, self.config_co["py_tracking_phi_list"])
+        os.chdir(self.source_dir)
         for seed in seed_list:
             hit = self.seed_to_hit(seed, t)
             hit_list.append(hit)
         track_list = []
         if len(hit_list) > 0:
             hit_list.insert(0, hit_list[0])
+            os.chdir(self.run_dir)
             track_list = self.tracking.track_many(hit_list)
-        os.chdir(self.here)
+            os.chdir(self.source_dir)
         return track_list
 
     def get_decoupled(self, tm):
@@ -473,6 +475,7 @@ class ClosedOrbitFinder4D(object):
 
     def minuit_function(self, nvar, parameters, score, jacobian, err):
         seed_in = self.get_minuit_hit()
+        os.chdir(self.source_dir)
         hit_list = self.track_many([seed_in]*3, 0.0, False)[1]
         print("Iteration", self.iteration_number, "with seed", seed_in)
         for i, hit in enumerate(hit_list):

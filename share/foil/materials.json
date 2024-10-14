@@ -1,6 +1,6 @@
 {
   "units":{
-    "radiation_length":"cm",
+    "radiation_length":"g/cm^2",
     "density":"g/cm^3",
     "ion_energy":"eV",
     "molecular_mass":"u",
@@ -88,21 +88,6 @@
     ],
     "specific_heat":-1.0
   },
-  "liquid_hydrogen":{
-    "radiation_length":63.05,
-    "density":0.07080,
-    "ion_energy":21.8,
-    "molecular_mass":-1,
-    "delta":0.0,
-    "sigma_0,1":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
-                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
-    "sigma_-1,0":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
-                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
-    "elements_list":[
-        {"name":"hydrogen", "z":1, "a":1.00794, "fraction":1.0}
-    ],
-    "specific_heat":-1.0
-  },
   "gaseous_helium":{
     "radiation_length":94.32,
     "density":1.663E-04,
@@ -131,6 +116,37 @@
     "elements_list":[
         {"name":"carbon", "z":6, "a":12.0107, "fraction": 0.272916},
         {"name":"oxygen", "z":8, "a":15.999, "fraction": 0.727084}
+    ],
+    "specific_heat":-1.0
+  },
+  "liquid_hydrogen":{
+    "radiation_length":63.05,
+    "density":0.07080,
+    "ion_energy":21.8,
+    "molecular_mass":-1,
+    "delta":0.0,
+    "sigma_0,1":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
+                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
+    "sigma_-1,0":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
+                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
+    "elements_list":[
+        {"name":"hydrogen", "z":1, "a":1.00794, "fraction":1.0}
+    ],
+    "specific_heat":-1.0
+  },
+  "lithium_hydride":{
+    "radiation_length": 79.61 ,
+    "density":0.8200,
+    "ion_energy":36.5,
+    "molecular_mass":-1,
+    "delta":0.0,
+    "sigma_0,1":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
+                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
+    "sigma_-1,0":{"E_t":0.0, "a_1":0.0, "a_2":0.0, "a_3":0.0,
+                            "a_4":0.0, "a_5":0.0, "a_6":0.0},
+    "elements_list":[
+        {"name":"lithium", "z":3, "a":6.94, "fraction":0.873203},
+        {"name":"hydrogen", "z":1, "a":1.00794, "fraction":0.126797}
     ],
     "specific_heat":-1.0
   }

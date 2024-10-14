@@ -460,7 +460,7 @@ class TurnAction(object):
         self.model = model
         self.plot_contours = plot_contours
         self.plot_frequency = 100
-        self.output_directory = "output/"
+        self.output_directory = "output/test"
         self.plotter = PlotBeam(self.output_directory)
 
     def do_turn_action(self, turn, particle_collection):
@@ -482,7 +482,7 @@ def main_frequency_ramp():
     hold_time = 1000
 
     p_mid = Particle(t0, p_start.energy, BeamFactory.mass)
-    p_list = [p_mid]+BeamFactory.make_coasting_beam_square(10000, 57.7, 57.800001, n_turns=2, model=model)
+    p_list = [p_mid]+BeamFactory.make_coasting_beam_square(100, 57.7, 57.7, n_turns=2, model=model)
     program = PiecewiseInterpolation()
     program.f_list = [1.0/t0, 1.0/t0, 1.0/t1, 1.0/t1]
     program.t_list = [0, t1*hold_time, t1*(hold_time+ramp_time), t1*(hold_time+ramp_time+hold_time)]
@@ -581,7 +581,8 @@ def main_lemc():
 def main_fork(config):
     a_pid = os.fork()
     if a_pid == 0: # the child process
-        main_constant_bucket(*config)
+        main_frequency_ramp()
+        #main_constant_bucket(*config)
         # hard exit returning 0 - don't want to end up in any exit handling
         # stuff, just die ungracefully now the simulation has run
         os._exit(0)
@@ -593,10 +594,12 @@ def main_fork(config):
     print("PARENT - exiting main_fork")
 
 if __name__ == "__main__":
+    main_fork(None)
+    """
     for i in range(6):
         config = (57+i*0.1, 0.1, 0.004, 56, 4540, 4540, 2000, f"constant_bucket_central_energy_{i}")
         main_fork(config)
     for i in range(6):
         config = (57+i*0.1, 0.001, 0.004, 56, 4540, 4540, 2000, f"constant_bucket_central_energy_no_e_spread_{i}")
         main_fork(config)
-
+    """

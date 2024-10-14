@@ -5,6 +5,7 @@ import importlib
 import subprocess
 import datetime
 import json
+import importlib
 
 import numpy
 import ROOT
@@ -74,6 +75,14 @@ def main():
                     raise
                 else:
                     sys.excepthook(*sys.exc_info())
+    if "execute_modules" not in config.run_control:
+        return
+    for module_name in config.run_control["execute_modules"]:
+        importlib.import_module(module_name)
+        
+
+
+
     print("Finished with output in", config.run_control["output_dir"])
 
 if __name__ == "__main__":

@@ -106,6 +106,7 @@ class ToyModel(object):
         self.do_energy_loss = True
         self.seed = None
         self.is_horizontal = True # horizontal excursion or vertical
+        self.beam_filename = "beam_at_end.txt"
 
         self.real_range = [25.0*self.amp_scale, 0.05*self.amp_scale, 25.0*self.amp_scale, 0.025*self.amp_scale]
         self.real_centre = [0.0*self.amp_scale, 0.0*self.amp_scale, 0.0*self.amp_scale, 0.0*self.amp_scale]
@@ -424,6 +425,15 @@ class ToyModel(object):
             print("Printing particle data for turn", self.turn)
         for i in targets:
             print(i, "u:", self.beam_data[i], "t, p:", self.t_data[i], self.dp_over_p_data[i])
+
+    def print_beam(self, filename):
+        with open(filename, "w") as fout:
+            for i in range(len(self.beam_data)):
+                fout.write(f"{i} ")
+                for item in self.beam_data[i]:
+                    fout.write(f"{item} ")
+                fout.write(f"{self.t_data[i]} {self.dp_over_p_data[i]}\n")
+
 
     def do_one_turn(self):
         self.inject_one() # inject on the injection orbit in global coordinates
@@ -1268,6 +1278,8 @@ class ToyModel(object):
         os.chdir(here)
 
     def finalise(self, will_clear = True):
+        if self.beam_filename:
+            self.print_beam(self.output_dir+self.beam_filename)
         if not self.do_plots:
             return
         self.plot_foil_hits(self.real_range, self.real_centre)

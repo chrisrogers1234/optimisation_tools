@@ -462,9 +462,21 @@ class OpalTracking(TrackingBase):
             self._read_probes = self._read_ascii_probes
         elif file_format == "hdf5":
             self._read_probes = self._read_h5_probes
+        elif file_format in Hit.file_types():
+            self._read_xboa_probes()
         else:
             raise ValueError("Did not recognise Probe file format '"+str(file_format)+\
                              "'. Options are 'ascii' or 'hdf5'")
+
+    def _read_xboa_probes(self):
+        file_dict = self.get_name_dict()
+        print(" READ XBOA", self.output_name_dict)
+        for file_name, station in sorted(file_dict.items()):
+            print("   FILE", file_name, station)
+            try:
+                fin_list.append((open(file_name), station))
+            except OSError:
+                pass
 
     def _read_ascii_probes(self):
         # loop over files in the glob, read events and sort by event number

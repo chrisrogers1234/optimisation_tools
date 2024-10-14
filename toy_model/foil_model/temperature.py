@@ -187,7 +187,7 @@ def main():
         shutil.rmtree(output_dir)
     os.makedirs(output_dir)
     heating = FoilHeatingModel()
-    heating.setup(config_fets_ring())
+    heating.setup(config_sns())
     for i in range(10):
         solution = heating.integrate()
         for i, row in enumerate(solution):

@@ -51,6 +51,9 @@ class PlotG4BL(object):
                 dirname = os.path.dirname(file_name)
                 subs = open(os.path.join(dirname, "subs.json")).read()
                 subs_json = json.loads(subs)
+                if len(bunch_list) == 0 or len(bunch_list[0]) == 0:
+                    print("WARNING - no data for", file_name)
+                    continue
                 if bunch_list[0][0]["p"] > self.max_p or bunch_list[0][0]["p"] < self.min_p:
                     print("Skipping", file_name, f"{self.min_p} > p > {self.max_p}")
                     continue
@@ -316,10 +319,9 @@ class PlotG4BL(object):
     beta_limit = 1e4
 
 def main():
-    version = "2024-03-28"
-    run_dir = "output/demo_v6/"
-    run_dir_glob = [run_dir+f"2024-03-28_baseline_pz=200_step=*_tol=*/"]
-    plot_dir = run_dir+f"/plot_tune_tol/"
+    run_dir = "output/rectilinear_v1/"
+    run_dir_glob = [run_dir+f"pz_beam=*;_will_use_ds=0/"]
+    plot_dir = run_dir+f"/plot_tune_will_use_ds=0/"
 
     file_name = "track_beam_amplitude/da_scan/output*.txt"
     co_file_name = "closed_orbits_cache"

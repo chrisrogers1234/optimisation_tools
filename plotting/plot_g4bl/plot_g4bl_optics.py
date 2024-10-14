@@ -33,6 +33,7 @@ class PlotG4BL(object):
         self.co_file = co_file
         self.run_dir_glob = run_dir_glob
         self.max_score = max_score
+        self.will_plot_beta = True
 
     def load(self):
         if "root" in self.file_format:
@@ -70,10 +71,12 @@ class PlotG4BL(object):
             globble = glob.glob(run_dir_glob)
         if len(globble) == 0:
             raise RuntimeError("Failed to glob from", run_dir_glob)
+        print("GLOBBLE", globble)
         for a_dir in sorted(globble):
             new_co_data = []
             a_file_glob = os.path.join(a_dir, reference_file)
             reference_data_glob = sorted(glob.glob(a_file_glob))
+            print("REF LEN", len(reference_data_glob), a_file_glob, "\n", os.getcwd())
             for i, file_name in enumerate(reference_data_glob):
                 new_co_data.append({"bunch_list":self.load_bunch(file_name, reference_file_format)})
             co_file_name = os.path.join(a_dir, co_file)
@@ -81,7 +84,7 @@ class PlotG4BL(object):
                 fin = open(co_file_name)
                 co_data = json.loads(open(co_file_name).read())
                 if len(co_data) != len(new_co_data):
-                    raise ValueError(f"Found {len(co_data)} transfer maps and {len(new_co_data)} reference outputs in {co_file_name}")
+                    raise ValueError(f"Found {len(co_data)} transfer maps ({os.path.split(co_file_name)[1]}) and {len(new_co_data)} reference outputs ({os.path.split(reference_file)[1]}) in {co_file_name}")
                 for i, co in enumerate(co_data):
                     new_co_data[i].update(co)
                     print("  closed orbit", co["seed"])
@@ -209,6 +212,7 @@ class PlotG4BL(object):
             co_data = [self.co_data[i] for i in item_list["item_list"]]
             x_list = []
             beta_0_list = []
+            disp_theta_list = []
             disp_0_list = []
             disp_1_list = []
             for i, data in enumerate(co_data):
@@ -226,19 +230,31 @@ class PlotG4BL(object):
                     beta_0_list.append(ref_tm.get_beta(0))
                     try:
                         z_list, disp_x_list, disp_y_list = self.get_dispersion(data_low, data_high)
+                        disp_theta = math.atan2(disp_y_list[0], disp_x_list[0])
+                        disp_theta_list.append(math.degrees(disp_theta))
                     except (IndexError, RuntimeError):
                         z_list, disp_x_list, disp_y_list = [None], [None], [None]
+                    disp_theta_list.append(None)
                     disp_0_list.append(disp_x_list[0])
                     disp_1_list.append(disp_y_list[0])
                 else:
+                    print("Failed stability check", i)
+                    disp_theta_list.append(None)
                     beta_0_list.append(None)
                     disp_0_list.append(None)
                     disp_1_list.append(None)
                 x_list.append(data["substitutions"][var_key])
 
-            axes.plot(x_list, beta_0_list, label="$\\beta_\\perp$")
-            axes.set_xlabel(self.key_subs[var_key]+" "+self.units_subs[var_key])
-            axes.set_ylabel("$\\beta$ [mm]")
+            if self.will_plot_beta:
+                axes.plot(x_list, beta_0_list, label="$\\beta_\\perp$")
+                axes.set_xlabel(self.key_subs[var_key]+" "+self.units_subs[var_key])
+                axes.set_ylabel("$\\beta$ [mm]")
+                axes.set_ylim([0.0, 4000.0])
+            else:
+                axes.plot(x_list, disp_theta_list, label="$\\theta(D)$")
+                axes.set_xlabel(self.key_subs[var_key]+" "+self.units_subs[var_key])
+                axes.set_ylabel("$\\theta(D)$ [$^\\circ$]")
+                axes.set_ylim([-180, 180])
             axes2 = axes.twinx()
             axes2.plot(x_list, disp_0_list, '--', label="D$_x$ ")
             axes2.plot(x_list, disp_1_list, ':', label="D$_y$ ")
@@ -344,7 +360,7 @@ class PlotG4BL(object):
 
     def plot_beam_init(self):
         print("Found", len(self.tracking), "bunches")
-        labels = {"x":"x [mm]", "y":"y [mm]", "px":"p$_x$ [MeV/c]", "py":"p$_y$ [MeV/c]", "p":"p [MeV/c]"}
+        labels = {"x":"x [mm]", "y":"y [mm]", "px":"p$_x$ [GeV/c]", "py":"p$_y$ [GeV/c]", "p":"p [GeV/c]"}
         for x_var, y_var in ("x", "p"), ("y", "p"), ("px", "p"), ("py", "p") :
             figure = matplotlib.pyplot.figure()
             axes = figure.add_subplot(1, 1, 1)
@@ -459,6 +475,7 @@ class PlotG4BL(object):
         z_list = [data_high["ref_track"][i] for i in i_list]
         dispx_list = [dx*p0/dp for dx in dx_list]
         dispy_list = [dy*p0/dp for dy in dy_list]
+        print(f"At p0 {p0} dispersion in x is {dispx_list[0]} and in y is {dispy_list[0]}")
         return z_list, dispx_list, dispy_list
 
     def plot_envelope_z(self):
@@ -540,7 +557,7 @@ class PlotG4BL(object):
     units_subs = {
             "__coil_radius__":"[mm]",
             "__dipole_by__":"[T]",
-            "__momentum__":"[MeV/c]",
+            "__momentum__":"[GeV/c]",
             "__wedge_opening_angle__":"$^\\circ$",
             "__energy__":"",
     }
@@ -568,24 +585,42 @@ class RefBz():
     def get_field(self, z):
         return self.b1*math.sin(2.*math.pi*z/self.length)+self.b2*math.sin(4.*math.pi*z/self.length)
 
-def main():
-    version = "2024-04-16"
-    run_dir = "output/demo_v23/"
-    by = "0.1"
-    polarity = "+--+"
+def fname(prefix, params, ignore_globs):
+    fname = f"{prefix}"
+    for key, value in params:
+        print(key, value)
+        if ignore_globs and ("*" in value or "?" in value):
+            continue
+        fname += f"{key}={value};_"
+    return fname[:-2]
 
-    run_dir_glob = [f"{run_dir}/pz=*_by={by}_polarity={polarity}*",]
-    plot_dir = run_dir+f"/{version}_optics_plots_by={by}_polarity={polarity}/"
-    target_pz = [{"__momentum__":mom} for mom in [0.19, 0.200, 0.210]]
+
+def main():
+    run_dir = "output/demo_oct24_v2"
+    params = [
+        ("pz_beam", "*"),
+        ("harmonics", "(7.5)"),
+        ("cell_length", "2000"),
+    ]
+
+    run_dir_glob = fname(f"{run_dir}/", params, False)
+    plot_dir = fname(f"{run_dir}/", params, True)
+    print("plotting into", plot_dir)
+    target_pz = [{"__momentum__":mom} for mom in [0.2, 0.3, 0.4]]
 
     file_name = "tmp/find_closed_orbits/output_1.txt"
     co_file_name = "closed_orbits_cache"
-    cell_length = 4600.0 # full cell length
+    if "cell_length" in dict(params):
+        cell_length = float(dict(params)["cell_length"]) # full cell length
+        h0 = 0.0 #float(dict(params)["harmonic_0"])
+    else:
+        cell_length = 1600
+        h0 = 0
     file_format = "icool_for009"
     #file_format = "bdsim_root_file"
     plotter = PlotG4BL(run_dir_glob, co_file_name, cell_length, target_pz, file_name, file_format, plot_dir, 1e9)
-    plotter.ref_bz = RefBz(7/0.8, 1/0.8, 800)
-    plotter.beta_limit = 1e3
+    plotter.ref_bz = RefBz(h0, 0.0, cell_length/2)
+    plotter.beta_limit = 1e4
     plotter.station_to_z_dict = dict([(i, i*100) for i in range(101)])
     plotter.load()
     plotter.load_beam_file("lattice/ruihu/beam_stage1.beam", "g4beamline_bl_track_file")

@@ -1,3 +1,4 @@
+import sys
 import math
 import cmath
 import numpy
@@ -78,7 +79,12 @@ class DecoupledTransferMatrix(object):
             self._get_decoupling()
         except (ZeroDivisionError, numpy.linalg.LinAlgError, RuntimeError):
             print("Matrix failing with traces", [sum([self.m[j,j] for j in range(2*i, 2*i+1)]) for i in range(self.dim)])
+            print(self.m)
+            sys.excepthook(*sys.exc_info())
             raise ValueError("Failed to decouple")
+
+    def __str__(self):
+        return str(self.m)
 
     def _force_normalise(self):
         self.m /= numpy.linalg.det(self.m)**(1.0/self.m.shape[0])

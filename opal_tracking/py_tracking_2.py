@@ -49,7 +49,12 @@ class PyOpalTracking2(OpalTracking):
     def _tracking(self, list_of_hits):
         if self.verbose:
             print("Tracking in dir", os.getcwd())
-        self.setup_dist_file(list_of_hits, self.beam_filename, self.ref, self.verbose)
+        if "beam_format" not in self.config.tracking or self.config.tracking["beam_format"] == "opal":
+            self.setup_dist_file(list_of_hits, self.beam_filename, self.ref)
+        else:
+            format = self.config.tracking["beam_format"]
+            xboa.hit.Hit.write_list_builtin_formatted(list_of_hits, format, self.beam_filename)
+        #self.setup_dist_file(list_of_hits, self.beam_filename, self.ref, self.verbose)
         self.cleanup()
         self.exec_module = import_my_lib(self.pyopal_file)
         old_time = time.time()
