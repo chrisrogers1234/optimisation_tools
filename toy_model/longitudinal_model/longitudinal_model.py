@@ -16,12 +16,12 @@ import optimisation_tools.utils.utilities as utilities
 
 class LongitudinalModel(object):
     def __init__(self):
-        self.r0 = 4540 # mm
-        self.k = 7.45
+        self.r0 = 26000 # mm
+        self.k = 1
         self.phi0 = 0.0 # rad
         self.mass = BeamFactory.mass # MeV/c^2
-        self.c_light = 300 # mm/ns
-        self.injection_momentum = 11 # MeV/c
+        self.c_light = 299.792458 # mm/ns
+        self.injection_momentum = 369 # MeV/c
         self.rf_program = ConstantBucket()
 
     def path_length(self, a_particle):
@@ -77,7 +77,10 @@ class LongitudinalModel(object):
         dt = self.rf_program.get_relative_time(a_particle.t) # relative to 0 crossing
         f0 = self.rf_program.get_frequency(a_particle.t)
         v0 = self.rf_program.get_voltage_magnitude(a_particle.t)
-        reference_phase = math.asin(dE/v0)
+        if math.fabs(v0) > 0.0 and math.fabs(dE/v0) < 1.0:
+            reference_phase = math.asin(dE/v0)
+        else:
+            reference_phase = 0.0
         actual_phase = dt*f0*2*math.pi
         delta_t = (actual_phase-reference_phase)/2/math.pi/f0
         if delta_t < -1/f0/2:
@@ -143,20 +146,70 @@ class LongitudinalModel(object):
         axes_twin.set_xlim(xlim)
 
 
-class BeamMonitor(object):
+class MonitorDigitisation():
+    def __init__(self):
+        self.t_bins = [0.0]
+        self.t_hist = [0]
+        self.t_resolution = 10.0
+
+    def append_time(self, time):
+        t_bin = int((time-self.t_bins[0])/self.t_resolution)
+        if t_bin < 0:
+            delta = abs(t_bin)
+            print("APPEND TIME NEG", time, t_bin)
+            self.t_bins = [self.t_bins[0]-self.t_resolution*(i+1) for i in reversed(range(delta+1))]+self.t_bins
+            self.t_hist = [0 for i in range(delta+1)] + self.t_hist
+            t_bin += delta
+        elif t_bin >= len(self.t_hist):
+            delta = t_bin - len(self.t_bins)
+            print("APPEND TIME POS", time, t_bin)
+            self.t_bins = self.t_bins + [self.t_bins[-1]+self.t_resolution*(i+1) for i in range(delta+1)]
+            self.t_hist = self.t_hist + [0 for i in range(delta+1)]
+        self.t_hist[t_bin] += 1
+
+    def do_one_turn(self, turn, particle_collection):
+        for p in particle_collection:
+            self.append_time(p.t)
+
+def test_monitor():
+    monitor_dig = MonitorDigitisation()
+    for t in [1, 2, 3, 4, 5]:
+        monitor_dig.append_time(t)
+    print([0.0, 10.0], monitor_dig.t_bins)
+    print([5],  monitor_dig.t_hist)
+
+    for t in [10.0, 10.1, 19.9, 20.0]:
+        monitor_dig.append_time(t)
+    print([0.0, 10.0, 20.0], monitor_dig.t_bins)
+    print([5, 3, 1],  monitor_dig.t_hist)
+
+    for t in [71.0, 65.1, 74.9, 62.0]:
+        monitor_dig.append_time(t)
+    print([0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0], monitor_dig.t_bins)
+    print([5,      3,    1,    0,    0,    0,    2,    2], monitor_dig.t_hist)
+
+    for t in [-21.0, -15.1, -24.9, -12.0]:
+        monitor_dig.append_time(t)
+    print([-30.0, -20.0, -10.0, 0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0], monitor_dig.t_bins)
+    print([    2,     2,     0,   5,    3,    1,    0,    0,    0,    2,    2], monitor_dig.t_hist)
+
+
+class BeamMonitor():
     def __init__(self):
         self.t_list = []
         self.e_list = []
+        self.output_directory = "./"
+        self.t_resolution = 10 # ns
+        self.dt = 50000
 
     def do_one_turn(self, turn, particle_collection):
         for p in particle_collection:
             self.t_list.append(p.t)
             self.e_list.append(p.energy)
 
-    def do_plot(self, t_resolution, output_directory, model):
-        dt = 50000
+    def do_plot(self, model):
         t0, t1 = min(self.t_list), max(self.t_list)
-        t_bins = [i*t_resolution for i in range(int(t1/t_resolution)+1)]
+        t_bins = [i*self.t_resolution for i in range(int(t1/self.t_resolution)+1)]
         figure = matplotlib.pyplot.figure(figsize=(20,10))
         axes = figure.add_subplot(1, 1, 1)
         binned_data, bin_edges, patches = axes.hist(self.t_list, bins=t_bins)
@@ -164,19 +217,34 @@ class BeamMonitor(object):
         axes.set_xlabel("time [ns]")
         axes.set_ylabel("N")
         model.plot_rf_data(axes, 100)
-        figure.savefig(os.path.join(output_directory, "monitor.png"))
-        with open(os.path.join(output_directory, "monitor.dat"), "w") as fout:
+        figure.savefig(os.path.join(self.output_directory, "monitor.png"))
+        with open(os.path.join(self.output_directory, "monitor.dat"), "w") as fout:
             for i in range(len(binned_data)):
                 fout.write(f"{bin_edges[i]} {binned_data[i]}\n")
-        tmin, tmax = t0, dt
+        tmin, tmax = t0, self.dt
         index = 0
         while tmax < t1:
             axes.set_xlim(tmin, tmax)
-            figure.savefig(os.path.join(output_directory, "monitor_"+str(index)+".png"))
-            tmin += dt
-            tmax += dt
+            figure.savefig(os.path.join(self.output_directory, "monitor_"+str(index)+".png"))
+            self.fft_plot(t_bins, binned_data, tmin, tmax, "monitor_fft_"+str(index)+".png")
+            tmin += self.dt
+            tmax += self.dt
             index += 1
         return figure
+
+    def fft_plot(self, t_bins, binned_data, t0, t1, name):
+        i0 = bisect.bisect_left(t_bins, t0)
+        i1 = bisect.bisect_left(t_bins, t1)
+        subdata = binned_data[i0:i1]
+        fft_out = scipy.fft.fft(subdata)
+        fft_freq = scipy.fft.fftfreq(subdata.shape[-1], t_bins[1]-t_bins[0])
+        figure = matplotlib.pyplot.figure(figsize=(20,10))
+        axes = figure.add_subplot(1, 1, 1)
+        axes.plot(fft_freq, fft_out.real, fft_freq, fft_out.imag)
+        axes.text(0.01, 0.95, f"Time window: {t0:.1f} {t1:.1f} [ns]",
+                  transform=axes.transAxes)
+        figure.savefig(os.path.join(self.output_directory, name))
+
 
 class RFProgram(object):
     def __init__(self):
@@ -298,7 +366,7 @@ class BeamFactory(object):
 class PlotBeam(object):
     def __init__(self, output_directory):
         self.t_bins = [i*360.0/100 for i in range(0, 100+1)]
-        self.e_range = [56.0, 59.0]
+        self.e_range = [69.75, 70.25]
         self.s = None
         self.output_directory = output_directory
 
@@ -332,7 +400,10 @@ class PlotBeam(object):
 
         axes = figure.add_subplot(1, 1, 1,  position=[0.7, 0.3, 0.3, 0.6])
         e_hist, e_bins = numpy.histogram(e_list, 1000, self.e_range)
-        axes.barh(e_bins[:-1], e_hist, (e_bins[1]-e_bins[0])/2, align="edge")
+        axes.barh(e_bins[:-1], e_hist, (e_bins[1]-e_bins[0]), align="center")
+        min_e, max_e, mean_e = min(e_list[1:]), max(e_list[1:]), numpy.mean(e_list[1:])
+        axes.text(0.1, 0.95, f"min, mean, max: {min_e:.5f}, {mean_e:.5f}, {max_e:.5f} [MeV]",
+                  transform=axes.transAxes)
         figure.savefig(os.path.join(self.output_directory, "longitudinal_"+suffix+".png"))
         return figure
 
@@ -357,20 +428,23 @@ class PlotBeam(object):
         echange = [model.get_rf_energy_change(Particle(actual_t, e0, m0)) for actual_t in actual_t_list]
         min_e, max_e = min(echange), max(echange)
         min_a, max_a = axes.get_ylim()
-        norm = lambda e: (max_a-min_a)/(max_e-min_e)*(e-min_e)+min_a
+        norm = lambda e: e #(max_a-min_a)/(max_e-min_e)*(e-min_e)+min_a
         echange = [norm(e) for e in echange]
 
         e0 = model.get_reference_energy(ref_particle.t, 1, BeamFactory.mass, ref_particle.energy, 1e-12)
         e1 = model.get_reference_energy(ref_particle.t+1/f0, 1, BeamFactory.mass, ref_particle.energy, 1e-12)
+        de_axes = axes.twinx()
+        de_axes.set_position(axes.get_position())
+        de_axes.plot([self.t_bins[0], self.t_bins[-1]], [norm(0.0)]*2, color="lightgrey", linestyle="--")
+        de_axes.plot([self.t_bins[0], self.t_bins[-1]], [norm(e1-e0)]*2, color="lightgrey", linestyle="dotted")
 
-        axes.plot([self.t_bins[0], self.t_bins[-1]], [norm(0.0)]*2, color="lightgrey", linestyle="--")
-        axes.plot([self.t_bins[0], self.t_bins[-1]], [norm(e1-e0)]*2, color="lightgrey", linestyle="dotted")
-
-        axes.plot(self.t_bins, echange)
+        de_axes.plot(self.t_bins, echange, color="orange")
 
         ref_t = [self.t_norm(ref_particle.t, ref_particle, model)]
         ref_echange = [norm(model.get_rf_energy_change(ref_particle))]
-        axes.scatter(ref_t, ref_echange, color="red")
+        de_axes.set_ylabel("dE per turn [MeV]")
+        de_axes.scatter(ref_t, ref_echange, color="red")
+
 
     def plot_energy(self, axes, model, p_list):
         x_lim = axes.get_xlim()
@@ -398,12 +472,16 @@ class PlotContours(object):
         ref_energy_2 = self.model.get_reference_energy(self.t0+1/self.f0, 1, BeamFactory.mass, self.ref_energy, 1e-12)
         ref_energy_0 = self.model.get_reference_energy(self.t0-1/self.f0, 1, BeamFactory.mass, self.ref_energy, 1e-12)
         delta_energy = (ref_energy_2-ref_energy_0)/2 # change in energy in one RF period s.t. TOF = RF period
-        if delta_energy > self.v0:
+        if delta_energy > self.v0 and abs(self.v0) > 1e-9:
             print("ERROR: 2 turn reference energy sweep from", ref_energy_0, "to", ref_energy_2, "more than the RF voltage", self.v0, "so no RF exists. Generating on-crest.")
-            self.v0_sin_phi_s = v0
+            self.v0_sin_phi_s = self.v0
         else:
             self.v0_sin_phi_s = delta_energy
-        self.phi_s = math.asin(delta_energy/self.v0)
+        if abs(self.v0) > 1e-9:
+            self.phi_s = math.asin(delta_energy/self.v0)
+        else:
+            self.phi_s = 0.0
+
 
     def plot_contours(self):
         nx, ny = 6, 6
@@ -472,26 +550,28 @@ class TurnAction(object):
         self.monitor.do_one_turn(turn, particle_collection)
         print("Turn", turn)
 
-def main_frequency_ramp():
+def main_voltage_ramp():
     model = LongitudinalModel()
-    p_start = Particle(0, 56.7, BeamFactory.mass)
-    p_end = Particle(0, 56.7, BeamFactory.mass)
+    energy = 70
+    p_start = Particle(0, energy, BeamFactory.mass)
+    p_end = Particle(0, energy, BeamFactory.mass)
     t0 = model.get_time_of_flight(p_start)
     t1 = model.get_time_of_flight(p_end)
-    ramp_time = 0.1
-    hold_time = 1000
-
+    print(f"Setting up lattice for energy {energy}, t0 {t0}")
     p_mid = Particle(t0, p_start.energy, BeamFactory.mass)
-    p_list = [p_mid]+BeamFactory.make_coasting_beam_square(100, 57.7, 57.7, n_turns=2, model=model)
+    p_list = [p_mid]+BeamFactory.make_coasting_beam_square(10000, energy, energy*1.0, n_turns=2, model=model)
     program = PiecewiseInterpolation()
-    program.f_list = [1.0/t0, 1.0/t0, 1.0/t1, 1.0/t1]
-    program.t_list = [0, t1*hold_time, t1*(hold_time+ramp_time), t1*(hold_time+ramp_time+hold_time)]
+    program.v_list = [0.000,  0.000,  0.004,  0.004,  0.000,  0.000]
+    program.t_list = [0,     t1*1000, t1*2000, t1*3000, t1*4000, t1*5000]
+    program.f_list = [0.99/t0]*len(program.v_list)
     max_time = program.t_list[-1]
-    program.v_list = [0.004]*len(program.t_list)
     program.setup(max_time)
     model.rf_program = program
+    output_directory = f"output/voltage_bump_v5"
     monitor = BeamMonitor()
-    output_directory = f"output/longitudinal/kurns_1/hold_ramp_hold_{hold_time}_{ramp_time}_{hold_time}"
+    monitor.output_directory = output_directory
+    monitor.t_resolution = 10 # ns
+    monitor.dt = 100000
     utilities.clear_dir(output_directory)
 
     turn_action = TurnAction(program, monitor, model, plot_contours=True)
@@ -500,88 +580,13 @@ def main_frequency_ramp():
     model.do_turn_action = turn_action.do_turn_action
     model.track_beam(max_time = max_time, max_turn = None, particle_collection=p_list)
     print("Done tracking - finishing up")
-    figure = monitor.do_plot(10, output_directory, model)
+    figure = monitor.do_plot(model)
     model.write_rf_data(output_directory+"/rf.dat", 10.0, max_time)
-
-def main_constant_bucket(energy, energy_spread, rf_voltage, nominal_rf_energy, r0_actual, r0_nominal, n_turns, output_dir):
-    model = LongitudinalModel()
-    model.r0 = r0_nominal
-    p_nominal = Particle(0, nominal_rf_energy, BeamFactory.mass)
-    t_nominal = model.get_time_of_flight(p_nominal)
-    track_time = n_turns*t_nominal
-
-    p_mid = Particle(0.0, energy, BeamFactory.mass)
-    e_0 = energy - energy_spread/2
-    e_1 = energy + energy_spread/2
-    p_list = [p_mid]+BeamFactory.make_coasting_beam_square(10000, e_0, e_1, n_turns=2, model=model)
-    program = PiecewiseInterpolation()
-    program.f_list = [1.0/t_nominal, 1.0/t_nominal]
-    program.t_list = [0, track_time*10]
-    program.v_list = [rf_voltage]*len(program.t_list)
-    program.setup(track_time*1.1)
-
-    model.rf_program = program
-    model.r0 = r0_actual
-    monitor = BeamMonitor()
-    output_directory = f"output/longitudinal_model/{output_dir}"
-    utilities.clear_dir(output_directory)
-
-    turn_action = TurnAction(program, monitor, model, plot_contours=True)
-    turn_action.plot_frequency = 10
-    turn_action.output_directory = output_directory
-    model.do_turn_action = turn_action.do_turn_action
-    model.track_beam(max_time = track_time, max_turn = None, particle_collection=p_list)
-    print("Done tracking - finishing up")
-    figure = monitor.do_plot(10, output_directory, model)
-    json_config = {
-        "energy":energy,
-        "energy_spread":energy_spread,
-        "rf_voltage":rf_voltage,
-        "nominal_rf_energy":nominal_rf_energy,
-        "r0_actual":r0_actual,
-        "r0_nominal":r0_nominal,
-        "output_dir":output_dir,
-        "rf_frequency":1.0/t_nominal,
-    }
-    fout = open(output_directory + "/config.json", "w")
-    fout.write(json.dumps(json_config, indent=2))
-    model.write_rf_data(output_directory+"/rf.dat", 10.0, track_time)
-
-def main_lemc():
-    BeamFactory.mass = 105.658
-    model = LongitudinalModel()
-    model.path_length = lambda x: 100
-
-    p_start = Particle(0, 1, BeamFactory.mass)
-    p_mid = Particle(0, 2, BeamFactory.mass)
-    p_end = Particle(0, 3, BeamFactory.mass)
-
-    t0 = model.get_time_of_flight(p_start)
-    t1 = model.get_time_of_flight(p_end)
-
-    p_list = [p_mid]+BeamFactory.make_coasting_beam_square(100, p_start.energy, p_end.energy, n_turns=1, model=model)
-
-    program = PiecewiseInterpolation()
-    program.f_list = [0.333, 0.333]
-    program.t_list = [0, 1e9]
-    program.v_list = [1e-3, 1e-3] # MV
-    program.setup(100.0)
-    model.rf_program = program
-    monitor = BeamMonitor()
-    output_directory = f"output/cooling_v1/wandering_1"
-    utilities.clear_dir(output_directory)
-
-    turn_action = TurnAction(program, monitor, model, plot_contours=True)
-    turn_action.plot_frequency = 1
-    turn_action.output_directory = output_directory
-    turn_action.plotter.e_range = [1, 10]
-    model.do_turn_action = turn_action.do_turn_action
-    model.track_beam(max_time = 30, max_turn = None, particle_collection=p_list)
 
 def main_fork(config):
     a_pid = os.fork()
     if a_pid == 0: # the child process
-        main_frequency_ramp()
+        main_voltage_ramp()
         #main_constant_bucket(*config)
         # hard exit returning 0 - don't want to end up in any exit handling
         # stuff, just die ungracefully now the simulation has run
@@ -594,7 +599,8 @@ def main_fork(config):
     print("PARENT - exiting main_fork")
 
 if __name__ == "__main__":
-    main_fork(None)
+    #main_fork(None)
+    test_monitor()
     """
     for i in range(6):
         config = (57+i*0.1, 0.1, 0.004, 56, 4540, 4540, 2000, f"constant_bucket_central_energy_{i}")
