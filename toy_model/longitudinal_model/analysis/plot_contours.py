@@ -17,7 +17,6 @@ class PlotContours(object):
         self.f0 = model.rf_program.get_frequency(self.t0)
         self.v0 = model.rf_program.get_voltage_magnitude(self.t0)
         self.ref_energy = model.get_reference_energy(self.t0, ref_particle.energy, 1e-12)
-        print("REF ENERGY", self.ref_energy)
         self.axes = axes
         self.get_phis()
         print("Set up contour plot with t", self.t0, "f0", self.f0, "v0", self.v0, "v0 phis", self.v0_sin_phi_s)

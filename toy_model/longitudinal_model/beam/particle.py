@@ -10,6 +10,9 @@ class Particle(object):
         if self.mass == None:
             self.mass = beam.beam_factory.BeamFactory.mass
 
+    def set_momentum(self, new_momentum):
+        self.energy = (new_momentum**2+self.mass**2)**0.5-self.mass
+
     def momentum(self):
         total_energy = self.energy + self.mass
         momentum = (total_energy**2-self.mass**2)**0.5

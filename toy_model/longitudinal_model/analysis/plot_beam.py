@@ -15,7 +15,7 @@ class PlotBeam(object):
     def __init__(self, output_directory, model):
         self.model = model
         self.t_bins = [model.harmonic_number*i*360.0/100 for i in range(0, 100+1)]
-        self.e_range = [69.75, 70.25]
+        self.e_range = [69.6, 70.4]
         self.s = None
         self.output_directory = output_directory
 
@@ -51,7 +51,7 @@ class PlotBeam(object):
         e_hist, e_bins = numpy.histogram(e_list, 1000, self.e_range)
         axes.barh(e_bins[:-1], e_hist, (e_bins[1]-e_bins[0]), align="center")
         min_e, max_e, mean_e = min(e_list[1:]), max(e_list[1:]), numpy.mean(e_list[1:])
-        axes.text(0.1, 0.95, f"min, mean, max: {min_e:.5f}, {mean_e:.5f}, {max_e:.5f} [MeV]",
+        axes.text(0.1, 0.95, f"min, mean, max E$_k$: {min_e:.5f}, {mean_e:.5f}, {max_e:.5f} [MeV]",
                   transform=axes.transAxes)
         figure.savefig(os.path.join(self.output_directory, "longitudinal_"+suffix+".png"))
         return figure

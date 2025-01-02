@@ -9,15 +9,13 @@ import optimisation_tools.toy_model.longitudinal_model.instrumentation as instru
 import optimisation_tools.toy_model.longitudinal_model.analysis as analysis
 import beam.beam_factory
 
-
-
 class LongitudinalModel(object):
     def __init__(self):
         self.r0 = 26000 # mm
         self.phi0 = 0.0 # rad
         self.mass = beam.beam_factory.BeamFactory.mass # MeV/c^2
         self.c_light = 299.792458 # mm/ns
-        self.injection_momentum = 369 # MeV/c
+        self.injection_momentum = 369.121 # MeV/c
         self.harmonic_number = 1
         self.rf_program = None
 

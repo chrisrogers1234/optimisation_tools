@@ -29,7 +29,8 @@ class SynchrotronModel(transport.longitudinal_model.LongitudinalModel):
         p0 = self.get_magnet_momentum(a_particle.t)
         p1 = a_particle.momentum()
         dp = p1-p0
-        t0 = self.r0*2*math.pi/a_particle.beta()/self.c_light
-        dt = -t0*p0/dp/self.phase_slip # (linear) phase slip is domega/dp  * p/omega
-        t1 = t0+dt
+        f0 = a_particle.beta()*self.c_light/self.r0/2/math.pi
+        df = -self.phase_slip*f0*dp/p0
+        f1 = f0+df
+        t1 = 1/f1
         return t1
