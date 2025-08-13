@@ -397,7 +397,7 @@ class OpalTracking(TrackingBase):
         return proc
 
     @classmethod
-    def setup_dist_file(cls, list_of_hits, file_name, reference_hit, verbose):
+    def setup_dist_file(cls, list_of_hits, file_name, reference_hit, verbose=0):
         fout = open(file_name, "w")
         # OPAL goes into odd modes if there are < 2 entries in the beam file
         while len(list_of_hits) > 0 and len(list_of_hits) < cls.min_track_number:

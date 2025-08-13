@@ -58,7 +58,7 @@ class G4BLTracking(TrackingBase):
           terminal output from the opal command; if None, G4BLTracking will make
           a temp file
         """
-        self.verbose = True
+        self.verbose = 1000
         self.beam_filename = beam_filename
         self.beam_format = "g4beamline_bl_track_file"
         self.lattice_filename = lattice_filename
@@ -128,7 +128,7 @@ class G4BLTracking(TrackingBase):
 
     def track_one(self, hit):
         """
-        Track one hit through Opal
+        Track one hit through G4BL
 
         Returns a list of hits, sorted by time.
         """
@@ -149,6 +149,9 @@ class G4BLTracking(TrackingBase):
             for hit in list_of_hits:
                 hit["event_number"] = renumber
                 renumber = renumber+1
+        if self.verbose > 50:
+            for hit in list_of_hits:
+                print(f"G4BL Track many with Hit t {hit['t']} m {hit['mass']} x {hit['x']}  {hit['y']}  {hit['z']} p {hit['px']} {hit['py']}  {hit['pz']}")
         if self.do_tracking:
             self._tracking(list_of_hits)
         if self.verbose > 30:
@@ -168,6 +171,8 @@ class G4BLTracking(TrackingBase):
         proc = subprocess.Popen(command,
                                 stdout=log,
                                 stderr=subprocess.STDOUT)
+        if self.verbose > 50:
+            print("Running", command)
         return proc
 
     def _tracking(self, list_of_hits):
