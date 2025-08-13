@@ -13,6 +13,7 @@ import scipy
 from xboa.bunch import Bunch
 from xboa.hit import Hit
 import xboa.common
+import xboa.algorithms.tune
 
 from optimisation_tools.utils import utilities
 from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransferMatrix
@@ -25,7 +26,7 @@ class PlotG4BL(object):
         self.co_data = []
         self.min_n_cells = 500
         self.target_p = 200
-        self.min_p = 169
+        self.min_p = 149
         self.max_p = 231
         utilities.clear_dir(plot_dir)
         self.load_data(run_dir_glob, co_file, reference_file, reference_file_format)
@@ -67,7 +68,7 @@ class PlotG4BL(object):
 
     def do_plots(self):
         self.figure1 = matplotlib.pyplot.figure()
-        self.figure2 = matplotlib.pyplot.figure()
+        self.figure2 = matplotlib.pyplot.figure(figsize=(12, 10))
         self.figure3 = matplotlib.pyplot.figure()
         self.figure4 = matplotlib.pyplot.figure()
         self.figure5 = matplotlib.pyplot.figure()
@@ -130,15 +131,25 @@ class PlotG4BL(object):
             data["octupole_list"] = []
             data["max_cell"] = []
             data["amp0"] = []
-            dz = bunch_list[0][2]["z"] - bunch_list[0][0]["z"]
+            try:
+                dz = bunch_list[0][2]["z"] - bunch_list[0][0]["z"]
+            except IndexError:
+                continue
             data["var"] = self.get_ellipse(bunch_list[4]).tolist()
             print("process data", i, len(bunch_list))
-            for bunch in bunch_list[:]:
+            for j, bunch in enumerate(bunch_list[:]):
                 x0 = bunch[0]["x"]
-                fft_input_data = numpy.array([hit["x"] for hit in bunch[::2]])
+                fft_input_data = numpy.array([hit["x"] for hit in bunch[::1]])
                 fft_output_data = scipy.fft.fft(fft_input_data)[1:]
                 if len(fft_output_data) == 0:
                     continue
+                xp_input_data = numpy.array([hit["x'"] for hit in bunch[::1]])
+                tune = xboa.algorithms.tune.DPhiTuneFinder(fft_input_data, xp_input_data)
+                try:
+                    tune_alt = tune.get_tune()
+                except:
+                    print(f"Failed to get tune_alt for data {i} bunch {j}")
+                    tune_alt = 0.0
 
                 data["max_cell"].append(max([hit["z"] for hit in bunch])/dz)
                 data["fft_detail_nu_list"].append([ffti/len(fft_output_data) for ffti in range(len(fft_output_data))])
@@ -154,7 +165,7 @@ class PlotG4BL(object):
                 data["x_init_list"].append(bunch[0]["x"])
                 fft_max_i = data["fft_detail_mag_list"][-1].index(max(data["fft_detail_mag_list"][-1]))
                 data["fft_list"].append(fft_max_i/len(fft_output_data))
-                #data["tune_alt"].append(self.sine_fit(fft_input_data)) # doesnt work!!!
+                data["tune_alt"].append(tune_alt)
                 data["fft_angle_list"].append(data["fft_detail_angle_list"][-1][fft_max_i])
                 data["amp0"].append(xboa.bunch.Bunch.get_amplitude(bunch, bunch[0], ["x"], data["var"], {"x":0., "px":0.}))
 
@@ -233,15 +244,15 @@ class PlotG4BL(object):
             for j, n in enumerate(data["max_cell"]):
                 x0 = data["x_init_list"][j]
                 if n > self.min_n_cells and x0 > 1e-9:
-                    fft_list.append(data["fft_list"][j])
-                    #fft_list.append(data["tune_alt"][j])
+                    fft_list.append(data["tune_alt"][j])
                     fft_angle_list.append(data["fft_angle_list"][j])
                     x_init_list.append(x0)
             if len(fft_list) == 0:
                 print(f"No data found for {data['file_name']}")
                 data["fit_params"] = [0.0, 0.0]
                 continue
-            pplot = axes2.plot(fft_list, x_init_list) #, c=rgba)
+            pplot = axes2.plot(fft_list, x_init_list, c=rgba)
+            axes2.scatter(fft_list, x_init_list, s=10, color=pplot[0].get_color())
             axes2.scatter(fft_list[-1], x_init_list[-1], color=pplot[0].get_color())
             aopt, acov = self.fit(x_init_list, fft_list)
             fit_data = [self.get_y(x, aopt[0], aopt[1]) for x in x_init_list]
@@ -251,8 +262,16 @@ class PlotG4BL(object):
             data["fit_cov"] = acov
         self.figure2.colorbar(mappable=mappable, ax=axes2) 
         ylim = axes2.get_ylim()
-        for i in range(2, 8):
-            axes2.plot([1/i, 1/i], ylim, c='lightgray', linestyle='--')
+        value_list = []
+        for i in range(2, 10):
+            for j in range(1, 10):
+                if j/i >= 1 or j/i in value_list:
+                    continue
+                value_list.append(j/i)
+                axes2.plot([j/i, j/i], ylim, c='lightgray', linestyle='--')
+                axes2.text(j/i-0.01, 0.9, f"{j}/{i}", transform=axes2.transAxes,
+                           rotation=90, rotation_mode="anchor",
+                           horizontalalignment="left", verticalalignment="center")
         axes2.set_ylim(ylim)
         axes2.set_xlim(0.0, 1.0)
         axes2.set_xlabel("$\\nu$")
@@ -319,9 +338,9 @@ class PlotG4BL(object):
     beta_limit = 1e4
 
 def main():
-    run_dir = "output/rectilinear_v1/"
-    run_dir_glob = [run_dir+f"pz_beam=*;_will_use_ds=0/"]
-    plot_dir = run_dir+f"/plot_tune_will_use_ds=0/"
+    run_dir = "output/demo_apr25_v005/"
+    run_dir_glob = [run_dir+f"pz_beam=176"]#;_by=0.5;_dp_pos=0.08;_polarity=++++/"]
+    plot_dir = run_dir+f"/plot_tune_coarser/"
 
     file_name = "track_beam_amplitude/da_scan/output*.txt"
     co_file_name = "closed_orbits_cache"

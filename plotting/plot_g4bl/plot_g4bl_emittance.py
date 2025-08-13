@@ -21,15 +21,17 @@ from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransfer
 
 DecoupledTransferMatrix.det_tolerance = 1
 
-class PlotG4BL(object):
+class PlotG4BLEmittance(object):
     def __init__(self, run_dir_glob, file_name_glob, file_format, plot_dir):
         self.plot_dir_root = plot_dir
         self.short_keys_of_interest = []
         self.data = []
-        self.px_range = [-150.0, 150.0]
-        self.x_range = [-500.0, 500.0]
+        self.px_range = [-100.0, 100.0]
+        self.x_range = [-100.0, 100.0]
         self.pz_range = [1.0, 600.0]
-        self.e_range = [0.0, 600.0]
+        self.e_range = [100.0, 300.0]
+        self.emit_range = [0.0, 5.0]
+        self.emit6d_range = [0.0, 0.1]
         self.ct_range = [-20*300.0, 100*300.0]
         self.z_range = [None, None]
         self.file_format = file_format
@@ -41,6 +43,10 @@ class PlotG4BL(object):
         self.analysis_list = None
         self.run_dir_glob = run_dir_glob
         self.file_name_glob = file_name_glob
+        self.e_min = 0
+        self.e_max = 1e3
+        self.amp_trans_max = 30
+        self.amp_long_max = 30
 
     def plot_name(self, a_file):
         fname = a_file.split("/")[2]
@@ -157,12 +163,15 @@ class PlotG4BL(object):
         Bunch.clear_global_weights()
         data["bunch_list"][0].cut({"energy":self.e_min}, operator.lt, global_cut=True)
         data["bunch_list"][0].cut({"energy":self.e_max}, operator.gt, global_cut=True)
+        data["bunch_list"][0].cut({"amplitude x y":self.amp_trans_max}, operator.gt, global_cut=True)
+        data["bunch_list"][0].cut({"amplitude ct":self.amp_long_max}, operator.gt, global_cut=True)
         for bunch in data["bunch_list"]:
             bunch.conditional_remove({"pid":-13}, operator.ne)
             ev_repeats = [hit["event_number"] for hit in bunch]
             ev_repeats = set([ev for ev in ev_repeats if ev_repeats.count(ev)-1])
             for ev in ev_repeats:
                 bunch.conditional_remove({"event_number":ev}, operator.eq)
+            bunch.conditional_remove({"weight":0.5}, operator.lt)
         transmission = [bunch.bunch_weight() for bunch in data["bunch_list"]]
         for bunch in data["bunch_list"]:
             bunch.transmission_cut(data["bunch_list"][-1], global_cut=True)
@@ -214,6 +223,7 @@ class PlotG4BL(object):
         ahist, xedges, yedges, image = axes.hist2d(x_points, y_points, weights=h_ratio, bins=n_bins, range=[x_range, y_range])
         figure.colorbar(image)
         figure.savefig(self.plot_dir+"/scraping_ratio_amplitude.png")
+        matplotlib.pyplot.close(figure)
 
     def emittance_plot(self, data):
         z_list = self.get_z_list()
@@ -239,7 +249,7 @@ class PlotG4BL(object):
         axes.plot(z_list, emittance_fit, linestyle="dashed", color="lightblue")
         axes.plot(z_list, self.out_json["emittance_long"], c="r", label="$\\varepsilon_{//}$")
         lim = axes.get_ylim()
-        axes.set_ylim([0.0, lim[1]])
+        axes.set_ylim(self.emit_range)
         try:
             parameters, errors = scipy.optimize.curve_fit(self.exponential_fit_func, z_list, self.out_json["emittance_long"], p0=[-2, 50.0, +2])
             emittance_fit = self.exponential_fit_func(z_list, *parameters)
@@ -252,7 +262,7 @@ class PlotG4BL(object):
         axes.plot(z_list, self.out_json["emittance_6d"], c="black", label="$\\varepsilon_{6d}$")
         axes.set_ylabel("$\\varepsilon_{6d}$ [mm$^3$]")
         lim = axes.get_ylim()
-        axes.set_ylim([0.0, lim[1]])
+        axes.set_ylim(self.emit6d_range)
         eps_str = "$\\varepsilon^{eqm,1}_{//}=$"+str(round(parameters[0], 3))+" mm"
         eps_str += "; $\\varepsilon^{eqm,2}_{//}=$"+str(round(parameters[2], 3))+" mm"
         eps_str += "; $z_0=$"+str(round(parameters[1]))+" m"
@@ -261,6 +271,7 @@ class PlotG4BL(object):
         #axes.text(0.4, 0.68, trans_str, transform=axes.transAxes)
         figure.legend()
         figure.savefig(self.plot_dir+"/emittance_vs_z.png")
+        matplotlib.pyplot.close(figure)
 
     def get_z_list(self):
         z_list = [(z - self.out_json["z"][0])/xboa.common.units["m"] for z in self.out_json["z"]]
@@ -309,6 +320,7 @@ class PlotG4BL(object):
         axes.set_xlabel("z [m]")
         axes.set_ylabel("p [MeV/c]")
         figure.savefig(self.plot_dir+"/optics_vs_z.png")
+        matplotlib.pyplot.close(figure)
 
         self.transmission_plot(data)
         self.emittance_plot(data)
@@ -329,6 +341,7 @@ class PlotG4BL(object):
         axes.set_xlabel("z [m]")
         axes.set_ylabel("Transmission [%]")
         figure.savefig(self.plot_dir+"/transmission_vs_z.png")
+        matplotlib.pyplot.close(figure)
 
     def plot_transverse(self, data):
         self.rebunch(data)
@@ -363,7 +376,7 @@ class PlotG4BL(object):
             test_str += "$\\varepsilon_{x}$ "+str(round(bunch.get("emittance", ["x"]), 1))+" mm\n"
             test_str += "$\\varepsilon_{y}$ "+str(round(bunch.get("emittance", ["y"]), 1))+" mm\n"
             test_str += "$\\varepsilon_{\\perp}$ "+str(round(eps, 1))+" mm"
-            axes.text(0.01, 0.7, test_str, transform=axes.transAxes)
+            axes.text(0.01, 0.6, test_str, transform=axes.transAxes)
 
             my_vars[4] = [ct-my_vars[4][0] for ct in my_vars[4]]
             my_vars_cut[4] = [ct-my_vars_cut[4][0] for ct in my_vars_cut[4]]
@@ -418,138 +431,20 @@ class PlotG4BL(object):
             print(output)
         os.chdir(here)
 
-    @classmethod
-    def get_subs(cls, item):
-        return item["substitutions"][0]
-        if "file_name" not in item:
-            print("Failed", item["substitutions"])
-        subs_dir = os.path.split(item["file_name"])[0]
-        subs_name = os.path.join(subs_dir, "subs.json")
-        subs_str = open(subs_name).read()
-        subs_json = json.loads(subs_str)
-        return subs_json
-
-    @classmethod
-    def plot_scan(cls, glob_name, x_parameter, y_lambda, y_label, color_parameter=None):
-        glob_list = sorted(glob.glob(glob_name))
-        if len(glob_list) == 0:
-            raise RuntimeError(f"Failed to find any files matching {glob_name}")
-        #print("Plot scan loading")
-        #for file_name in glob_list:
-        #    print(f"    {file_name}")
-        json_list = [json.load(open(file_name)) for file_name in glob_list]
-        x_list = [cls.get_subs(item)[x_parameter] for item in json_list]
-        y_list = [y_lambda(item) for item in json_list]
-        print("   Plotting ", len(json_list), "points for", y_label)
-        print("     ", x_parameter, x_list)
-        print("     ", y_label, y_list)
-        figure = matplotlib.pyplot.figure()
-        axes = figure.add_subplot(1, 1, 1)
-        if color_parameter == None:
-            axes.scatter(x_list, y_list)
-        else:
-            c_list = [cls.get_subs(item)[color_parameter] for item in json_list]
-            print("   ", color_parameter, c_list)
-            scatter = axes.scatter(x_list, y_list, c=c_list)
-            c_label = f"{cls.key_subs[color_parameter]} {cls.units_subs[color_parameter]}"
-            axes.text(1.0, 1.03, c_label, transform=axes.transAxes)
-            figure.colorbar(scatter)
-        axes.set_ylabel(y_label)
-        axes.set_xlabel(cls.key_subs[x_parameter]+" "+cls.units_subs[x_parameter])
-        return figure
-
-    @classmethod
-    def plot_scan_group(self, glob_name, parameters_of_interest, scan_plot_dir, plot_title=""):
-        start_cell = self.start_cell
-        mid_cell = self.mid_cell
-        target_cell = self.target_cell
-        y_lambda_list = [
-            lambda item: item["emittance_long"][start_cell],
-            lambda item: item["emittance_perp"][start_cell],
-            lambda item: item["emittance_long"][mid_cell],
-            lambda item: item["emittance_perp"][mid_cell],
-            lambda item: item["emittance_long"][target_cell],
-            lambda item: item["emittance_perp"][target_cell],
-            lambda item: item["emittance_long_fit"][2],
-            lambda item: item["emittance_perp_fit"][2],
-            lambda item: item["transmission"][target_cell]/item["transmission"][start_cell]*100,
-            lambda item: item["transmission"][target_cell]/item["transmission"][mid_cell]*100,
-        ]
-        y_label_list = [
-            f"$\\varepsilon_{{//}}$ at cell {start_cell} [mm]",
-            f"$\\varepsilon_\\perp$ at cell {start_cell} [mm]",
-            f"$\\varepsilon_{{//}}$ at cell {mid_cell} [mm]",
-            f"$\\varepsilon_\\perp$ at cell {mid_cell} [mm]",
-            f"$\\varepsilon_{{//}}$ at cell {target_cell} [mm]",
-            f"$\\varepsilon_\\perp$ at cell {target_cell} [mm]",
-            "Estimated $\\varepsilon^{eqm}_{//}$ [mm]",
-            "Estimated $\\varepsilon^{eqm}_\\perp$ [mm]",
-            f"Transmission from cell {start_cell} to {target_cell} [%]",
-            f"Transmission from cell {mid_cell} to {target_cell} [%]",
-        ]
-        y_fname_list = [
-            f"eps_long_cell_{start_cell}",
-            f"eps_trans_cell_{start_cell}",
-            f"eps_long_cell_{mid_cell}",
-            f"eps_trans_cell_{mid_cell}",
-            f"eps_long_cell_{target_cell}",
-            f"eps_trans_cell_{target_cell}",
-            "eps_long_eqm",
-            "eps_trans_eqm",
-            f"transmission_{start_cell}_{target_cell}",
-            f"transmission_{mid_cell}_{target_cell}"
-        ]
-        y_range_list = [
-            [0, 200],
-            [0, 25],
-            [0, 200],
-            [0, 25],
-            [0, 200],
-            [0, 25],
-            [0, 200],
-            [0, 25],
-            [40, 80],
-            [80, 100],
-        ]
-        utilities.clear_dir(scan_plot_dir)
-        for i, x_parameter in enumerate(parameters_of_interest):
-            c_parameter = None
-            if len(parameters_of_interest) > 1:
-                c_parameter_list = parameters_of_interest[1:]+[parameters_of_interest[0]]
-                c_parameter = c_parameter_list[i]
-                print("Plotting x: ", x_parameter, "c:", c_parameter)
-            for jy, y_lambda in enumerate(y_lambda_list):
-                y_label = y_label_list[jy]
-                figure = self.plot_scan(glob_name, x_parameter, y_lambda, y_label, c_parameter)
-                figure.axes[0].set_ylim(y_range_list[jy])
-                figure.axes[0].grid(True, axis="y")
-                if plot_title:
-                    figure.suptitle(plot_title)
-                xname = x_parameter.replace("__", "")
-                fname = f"{scan_plot_dir}/{y_fname_list[jy]}-{xname}.png"
-                figure.savefig(fname)
-                print("    Saved", fname)
-            print("\n")
-
-    start_cell = 0
-    mid_cell = 20
-    target_cell = 25
-
-
-
     short_form = {
         "__dipole_field__":"by",
         "__momentum__":"pz_beam",
         "__coil_radius__":"r0",
         "__energy__":None,
-        "__wedge_angle__":"wedge_angle",
+        "__wedge_angle__":"dtheta",
         "__dipole_polarity1__":"dp",
-        "__wedge_thickness__":"wedge_thickness",
+        "__wedge_thickness__":"dt",
         "__version__":"version",
         "__polarity__":"polarity",
         "__rf_efield__":"rf_efield",
         "__rf_phase__":"rf_phase",
-        "__rf_window_thickness__":"rf_wt",
+        "__rf_window_thickness__":"window_thickness",
+        "__rf_window_material__":"window_material",
         "__eps_t__":"eps_t",
         "__eps_l__":"eps_l",
         "__material__":"material",
@@ -574,6 +469,7 @@ class PlotG4BL(object):
             "__eps_t__":"$\\varepsilon_{\\perp}$",
             "__eps_l__":"$\\varepsilon_{//}$",
             "__rf_window_thickness__":"window thickness",
+            "__rf_window_material__":"",
             "__rf_iris_factor__":"Iris Factor",
             "__harmonic_0__":"$B_{0}$",
             "__n_rf__":"N(rf)",
@@ -595,6 +491,7 @@ class PlotG4BL(object):
             "__eps_l__":"meV s",
             "__material__":"",
             "__rf_window_thickness__":"[mm]",
+            "__rf_window_material__":"",
             "__rf_iris_factor__":"",
             "__harmonic_0__":"[T]",
             "__n_rf__":"",
@@ -604,6 +501,198 @@ class PlotG4BL(object):
     beta_limit = 4e3
     el_limit = 25
 
+class Scan():
+    def __init__(self):
+        self.start_cell = 0
+        self.mid_cell = 0
+        self.target_cell = 0
+        self.highest = None
+        self.lowest = None
+
+    def get_subs(self, item):
+        return item["substitutions"][0]
+        if "file_name" not in item:
+            print("Failed", item["substitutions"])
+        subs_dir = os.path.split(item["file_name"])[0]
+        subs_name = os.path.join(subs_dir, "subs.json")
+        subs_str = open(subs_name).read()
+        subs_json = json.loads(subs_str)
+        return subs_json
+
+    def handle_multi(self, axes, x_list, y_list, c_list):
+        """Sometimes we have more than one entry per element in the y_list. In this case we want a line between each element"""
+        x_multilist = [] # extend x_list so same length as y_multilist
+        y_multilist = [] # flattened version of y_list
+        c_multilist = [] # extend c_list so same length as y_multilist
+        s_multilist = []
+        msize = matplotlib.rcParams['lines.markersize'] ** 2
+        for i, y_mini in enumerate(y_list):
+            x_multilist += [x_list[i]]*len(y_mini)
+            c_multilist += [c_list[i]]*len(y_mini)
+            y_multilist += y_mini
+            s_multilist += [msize/2]*(len(y_mini)-1)+[msize]
+        scatter = axes.scatter(x_multilist, y_multilist, c=c_multilist, s=s_multilist)
+        return scatter
+
+    def plot_scan(self, glob_name, x_parameter, y_lambda, y_label, color_parameter=None):
+        glob_list = sorted(glob.glob(glob_name))
+        if len(glob_list) == 0:
+            raise RuntimeError(f"Failed to find any files matching {glob_name}")
+        #print("Plot scan loading")
+        #for file_name in glob_list:
+        #    print(f"    {file_name}")
+        json_list = [json.load(open(file_name)) for file_name in glob_list]
+        x_list = [self.get_subs(item)[x_parameter] for item in json_list]
+        y_list = [y_lambda(item) for item in json_list]
+        self.highest = json_list[y_list.index(max(y_list))]
+        self.lowest = json_list[y_list.index(min(y_list))]
+        print("   Plotting ", len(json_list), "points for", y_label)
+        print("     ", x_parameter, x_list)
+        print("     ", y_label, y_list)
+        figure = matplotlib.pyplot.figure()
+        axes = figure.add_subplot(1, 1, 1)
+        if color_parameter == None:
+            axes.scatter(x_list, y_list)
+        else:
+            c_list = [self.get_subs(item)[color_parameter] for item in json_list]
+            print("   ", color_parameter, c_list)
+            try:
+                y_list[0][0]
+            except TypeError:
+                scatter = axes.scatter(x_list, y_list, c=c_list)
+            else:
+                scatter = self.handle_multi(axes, x_list, y_list, c_list)
+
+            c_label = f"{PlotG4BLEmittance.key_subs[color_parameter]} {PlotG4BLEmittance.units_subs[color_parameter]}"
+            axes.text(1.0, 1.03, c_label, transform=axes.transAxes)
+            figure.colorbar(scatter)
+        axes.set_ylabel(y_label)
+        axes.set_xlabel(PlotG4BLEmittance.key_subs[x_parameter]+" "+PlotG4BLEmittance.units_subs[x_parameter])
+        return figure
+
+    def fom_1(self, item, start_cell, mid_cell, target_cell):
+        n_stt = item["transmission"][start_cell]
+        n_mid = item["transmission"][mid_cell]
+        n_tgt = item["transmission"][target_cell]
+        eps_t_mid = item["emittance_perp"][mid_cell]
+        eps_t_tgt = item["emittance_perp"][target_cell]
+        eps_l_mid = item["emittance_long"][mid_cell]
+        eps_l_tgt = item["emittance_long"][target_cell]
+        fom = n_tgt/n_mid * eps_t_mid/eps_t_tgt * eps_l_mid/eps_l_tgt
+        if n_tgt/n_stt < 0.5:
+            fom *= n_tgt/n_stt
+        return fom
+
+    def plot_scan_group(self, glob_name, parameters_of_interest, scan_plot_dir, plot_title=""):
+        y_lambda_list = [
+            lambda item: item["emittance_long"][self.start_cell],
+            lambda item: item["emittance_perp"][self.start_cell],
+            lambda item: item["emittance_long"][self.mid_cell],
+            lambda item: item["emittance_perp"][self.mid_cell],
+            lambda item: item["emittance_long"][self.target_cell],
+
+            lambda item: item["emittance_perp"][self.target_cell],
+            lambda item: item["emittance_long_fit"][2],
+            lambda item: item["emittance_perp_fit"][2],
+            lambda item: (item["emittance_long"][self.mid_cell], item["emittance_long"][self.target_cell]),
+            lambda item: (item["emittance_perp"][self.mid_cell], item["emittance_perp"][self.target_cell]),
+
+            lambda item: item["transmission"][self.target_cell]/item["transmission"][self.start_cell]*100,
+            lambda item: item["transmission"][self.target_cell]/item["transmission"][self.mid_cell]*100,
+            lambda item: item["emittance_long"][self.target_cell]/item["emittance_long"][self.mid_cell]*100,
+            lambda item: item["emittance_perp"][self.target_cell]/item["emittance_perp"][self.mid_cell]*100,
+            lambda item: self.fom_1(item, self.start_cell, self.mid_cell, self.target_cell),
+            lambda item: self.fom_1(item, self.start_cell, self.mid_cell, self.final_cell),
+        ]
+        y_label_list = [
+            f"$\\varepsilon_{{//}}$ at cell {self.start_cell} [mm]",
+            f"$\\varepsilon_\\perp$ at cell {self.start_cell} [mm]",
+            f"$\\varepsilon_{{//}}$ at cell {self.mid_cell} [mm]",
+            f"$\\varepsilon_\\perp$ at cell {self.mid_cell} [mm]",
+            f"$\\varepsilon_{{//}}$ at cell {self.target_cell} [mm]",
+
+            f"$\\varepsilon_\\perp$ at cell {self.target_cell} [mm]",
+            "Estimated $\\varepsilon^{eqm}_{//}$ [mm]",
+            "Estimated $\\varepsilon^{eqm}_\\perp$ [mm]",
+            f"$\\varepsilon_{{//}}$ from cell {self.mid_cell} to {self.target_cell} [mm]",
+            f"$\\varepsilon_\\perp$ from cell {self.mid_cell} to {self.target_cell} [mm]",
+
+            f"Transmission from cell {self.start_cell} to {self.target_cell} [%]",
+            f"Transmission from cell {self.mid_cell} to {self.target_cell} [%]",
+            f"$\\Delta\\varepsilon_{{//}}/\\varepsilon_{{//}}$ from cell {self.mid_cell} to {self.target_cell} [%]",
+            f"$\\Delta\\varepsilon_\\perp/\\varepsilon_\\perp$  from cell {self.mid_cell} to {self.target_cell} [%]",
+            f"Figure of merit from cell {self.mid_cell} to {self.target_cell}",
+            f"Figure of merit from cell {self.mid_cell} to {self.final_cell}",
+        ]
+        y_fname_list = [
+            f"eps_long_cell_{self.start_cell}",
+            f"eps_trans_cell_{self.start_cell}",
+            f"eps_long_cell_{self.mid_cell}",
+            f"eps_trans_cell_{self.mid_cell}",
+            f"eps_long_cell_{self.target_cell}",
+
+            f"eps_trans_cell_{self.target_cell}",
+            "eps_long_eqm",
+            "eps_trans_eqm",
+            f"eps_long_cell_{self.mid_cell}_{self.target_cell}",
+            f"eps_trans_cell_{self.mid_cell}_{self.target_cell}",
+
+            f"transmission_{self.start_cell}_{self.target_cell}",
+            f"transmission_{self.mid_cell}_{self.target_cell}",
+            f"delta_eps_long_cell_{self.mid_cell}_{self.target_cell}",
+            f"delta_eps_trans_cell_{self.mid_cell}_{self.target_cell}",
+            f"fom_one_{self.mid_cell}_{self.target_cell}",
+
+            f"fom_one_{self.mid_cell}_{self.final_cell}",
+        ]
+        de_long = [2, 4]
+        dtrans = []
+        y_range_list = [
+            [0, 4],
+            [0, 3],
+        ]*5+[
+            [40, 80],
+            [80, 100],
+            [50, 100],
+            [50, 100],
+            [0, 3],
+            [0, 3],
+        ]
+        utilities.clear_dir(scan_plot_dir)
+        keep_open_x_list = [1]
+        keep_open_y_list = [8, 9, 11, 12, 13, 14]
+        write_best_list = [14, 15]
+        for i, x_parameter in enumerate(parameters_of_interest):
+            print("Parameters during plot:", parameters_of_interest)
+            c_parameter = None
+            if i == 0 and len(parameters_of_interest) > 1:
+                c_parameter = parameters_of_interest[1]
+            else:
+                c_parameter = parameters_of_interest[0]
+            print("Plotting x: ", x_parameter, "c:", c_parameter)
+            for jy, y_lambda in enumerate(y_lambda_list):
+                y_label = y_label_list[jy]
+                figure = self.plot_scan(glob_name, x_parameter, y_lambda, y_label, c_parameter)
+                figure.axes[0].set_ylim(y_range_list[jy])
+                figure.axes[0].grid(True, axis="y")
+                if jy in write_best_list:
+                    text = f"Highest: {round(y_lambda(self.highest), 2)}\n"
+                    for p in parameters_of_interest:
+                        text += f"{PlotG4BLEmittance.key_subs[p]}: {self.get_subs(self.highest)[p]}\n"
+                    figure.axes[0].text(0.7, 0.75, text, transform=figure.axes[0].transAxes)
+
+                if plot_title:
+                    figure.suptitle(plot_title)
+                xname = x_parameter.replace("__", "")
+                print(jy, y_fname_list)
+                fname = f"{scan_plot_dir}/{y_fname_list[jy]}-{xname}.png"
+                figure.savefig(fname)
+                if i not in keep_open_x_list or jy not in keep_open_y_list:
+                    matplotlib.pyplot.close(figure)
+                print("    Saved", fname)
+            print("\n")
+
+
 def make_run_dir_glob(run_dir, variables):
     a_glob = run_dir+"/"
     for key, value in variables:
@@ -612,60 +701,57 @@ def make_run_dir_glob(run_dir, variables):
     return a_glob
 
 def main():
-    tracking = "beam_file"
+    tracking = "beam"
+    efield = "30"
+    by = "0.2"
     variables = [
-        ("pz_beam", "300.0"),
-        ("harmonic_0", "*"),
-        ("iris_factor", "0.5"),
-        ("n_rf", "*"),
-        ("by", "0.6"),
-        ("polarity", "++++"),
-        ("wedge_thickness", "*"),
-        ("wedge_angle", "*"),
-        ("rf_efield", "25"),
-        ("rf_phase", "*"),
-        ("cell_length", "*"),
+        ("pz", "200"),
+        ("by", by),
+        ("dt", "25"),
+        ("dtheta", "20"),
+        ("phi_s", "10"),
+        ("efield", efield)
     ]
-    run_dir = "output/rectilinear_v35"
+    amp_trans_max = 150
+    amp_long_max = 300
+    run_dir = "output/demo_apr25_v029"
     run_dir_glob = make_run_dir_glob(run_dir, variables)
-    plot_dir = f"emittance_plots_{tracking}/"
-    file_name = f"track_beam_amplitude/{tracking}/output.txt"
+    run_dir_glob = f"{run_dir}/cooling_demo_github_test/"
+    plot_dir = f"emittance_plots_{tracking}_amp_t={amp_trans_max}_amp_l={amp_long_max}/"
+    #file_name = f"track_beam_amplitude/{tracking}/output.txt"
+    file_name = f"g4bl/output.txt"
     file_format = "icool_for009"
-    frequency = 0.176
-
-    #run_dir = "output/rectilinear_prab/simulation_v1/stage_a1-no-decay"
-    #run_dir_glob = run_dir
-    #file_name = "particles_info.txt"
-    #frequency = 0.352
-
-    plotter = PlotG4BL(run_dir_glob, file_name, file_format, plot_dir)
+    frequency = 0.704
+    print(f"Running with glob '{run_dir_glob}'")
+    plotter = PlotG4BLEmittance(run_dir_glob, file_name, file_format, plot_dir)
     plotter.analysis_list = None
     for key, value in variables:
         if "*" in value or "?" in value:
             plotter.short_keys_of_interest.append(key)
-    plotter.short_keys_of_interest = ["by", "wedge_thickness", "wedge_angle", "rf_efield"]
+    plotter.short_keys_of_interest = ["dtheta", "dt"]
+    plotter.amp_trans_max = amp_trans_max
+    plotter.amp_long_max = amp_long_max
     plotter.e_min = 0.0
     plotter.e_max = 500.0
     plotter.z_range = [0*1e3, 2000*1e3] # [None, None]#
-    plotter.max_station = 1000 # max station for phase space plots
-    plotter.station_stroke = 50 # stroke station for phase space plots
+    plotter.emit_range = [0.0, 5.0]
+    plotter.emit6d_range = [0.0, 0.1]
+    plotter.max_station = 200 # max station for phase space plots
+    plotter.station_stroke = 1 # stroke station for phase space plots
     plotter.frequency = frequency
     plotter.glob_data()
-    #plotter.do_plots()
-    index = [var[0] for var in variables].index("rf_efield")
-    efield_for_scan = variables[index][1]
+    plotter.do_plots()
     index = [var[0] for var in variables].index("by")
-    by_for_scan = variables[index][1]
+    scan = Scan()
     scan_glob = run_dir_glob+plot_dir+"/"+plotter.output_filename
-    scan_plot_dir = run_dir+f"/scan_plots_{efield_for_scan}MVm"
+    scan_plot_dir = run_dir+f"/scan_plots_efield={efield}"
     for key in plotter.short_keys_of_interest:
             scan_plot_dir += f"_{key}"
-    PlotG4BL.start_cell = 0
-    PlotG4BL.mid_cell = 25
-    PlotG4BL.target_cell = 50
-    plotter.plot_scan_group(scan_glob, ["__wedge_angle__", "__wedge_thickness__"], scan_plot_dir, f"E$_0$ = {efield_for_scan} MV/m; $B_y$ = {by_for_scan} T")
-
-
+    scan.start_cell = 0
+    scan.mid_cell = 25
+    scan.target_cell = 50
+    scan.final_cell = 100
+    #scan.plot_scan_group(scan_glob, ["__wedge_angle__", "__wedge_thickness__", "__rf_phase__"], scan_plot_dir, f"RF Field = {efield} MV/m; B$_y$ = {by} T")
 
 if __name__ == "__main__":
     main()

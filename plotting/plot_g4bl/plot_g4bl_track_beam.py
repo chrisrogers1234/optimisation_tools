@@ -27,6 +27,7 @@ class PlotG4BL(object):
         self.variables_of_interest = None
         self.colors =  ["C"+str(i) for i in range(len(self.co_data))]
         self.a_4d_max = 1e9
+        self.beta_lim = [0.0, 1000.0]
         self.max_score = max_score
         self.title = ""
         self.n_a4d_bins = 40
@@ -119,6 +120,50 @@ class PlotG4BL(object):
         variables, a_4d_good, a_4d_all = self.plot_phase_space(input_station, output_station)
         self.plot_a4d_ratio(variables, a_4d_good, a_4d_all)
 
+    def clean_dupes(self, bunch):
+        ev_numbers = set([hit["event_number"] for hit in bunch])
+        new_bunch_hits = []
+        for ev in ev_numbers:
+            hit_list = bunch.get_hits("event_number", ev)
+            hit_list = sorted(hit_list, key = lambda hit: hit["t"])
+            new_bunch_hits.append(hit_list[0])
+        new_bunch = xboa.bunch.Bunch.new_from_hits(new_bunch_hits)
+        return new_bunch
+
+    def plot_phase_space_alt(self, data, event_list, station_list, good_events):
+        var_x = "x"
+        label_x = "x [mm]"
+        var_y = "px"
+        label_y = "$p_x$ [MeV/c]"
+        figure = matplotlib.pyplot.figure()
+        axes = figure.add_subplot(1, 1, 1)
+        x_data = dict((ev, []) for ev in event_list)
+        y_data = dict((ev, []) for ev in event_list)
+        for bunch in data["bunch_list"]:
+            self.clean_dupes(bunch)
+            if station_list is not None and bunch[0]["station"] not in station_list:
+                continue
+            for hit in bunch:
+                ev = hit["event_number"]
+                if ev not in event_list:
+                    continue
+                x_data[ev].append(hit[var_x])
+                y_data[ev].append(hit[var_y])
+        for ev in x_data.keys():
+            if ev in good_events:
+                axes.scatter(x_data[ev], y_data[ev], s=1)
+        x_lim = axes.get_xlim()
+        y_lim = axes.get_ylim()
+        for ev in x_data.keys():
+            if ev not in good_events:
+                axes.scatter(x_data[ev], y_data[ev], c="grey", s=1)
+
+        axes.set_xlabel(label_x)
+        axes.set_ylabel(label_y)
+        axes.set_xlim(x_lim)
+        axes.set_ylim(y_lim)
+        return figure
+
     def plot_phase_space(self, input_station, output_station):
         input_bunch, output_bunch = xboa.bunch.Bunch(), xboa.bunch.Bunch()
         a_4d_all = []
@@ -132,9 +177,12 @@ class PlotG4BL(object):
                     input_bunch = bunch
                 if bunch[0]["station"] == output_station:
                     output_bunch = bunch
+            input_bunch = self.clean_dupes(input_bunch)
+            output_bunch = self.clean_dupes(output_bunch)
             print("    with", variables[-1], "found", len(input_bunch), "input events", len(output_bunch), "output events")
             good_events = [hit["event_number"] for hit in output_bunch]
 
+            poincare_figure = self.plot_phase_space_alt(data, range(0, 201, 10), None, good_events)
             figure = matplotlib.pyplot.figure(figsize=(20,10))
             axes = figure.add_subplot(2, 2, 1)
 
@@ -164,7 +212,7 @@ class PlotG4BL(object):
             try:
                 print(self.get_tm(data["tm"]))
                 tm = DecoupledTransferMatrix(self.get_tm(data["tm"]))
-            except ValueError: # just try to plug on
+            except (ValueError, IndexError): # just try to plug on
                 tm = None
             if tm is None or tm.chol is None:
                 print("Error for", data["variables"], "using default tm")
@@ -194,6 +242,8 @@ class PlotG4BL(object):
 
             name = [self.short_form[key]+"_"+str(data["substitutions"][key]) for key in self.variables_of_interest]
             figure.savefig(os.path.join(self.plot_dir, "input_station_"+"_".join(name)+".png"))
+            poincare_figure.suptitle(" ".join(name).replace("_", " "))
+            poincare_figure.savefig(os.path.join(self.plot_dir, "poincarre_"+"_".join(name)+".png"))
             if len(matplotlib.pyplot.get_fignums()) > 0:
                 matplotlib.pyplot.close(figure)
         return variables, a_4d_good, a_4d_all
@@ -224,11 +274,16 @@ class PlotG4BL(object):
         y_list = []
         for data in self.co_data:
             x_list.append(data["variables"][x_key])
+            print(f"Plotting beta for {x_list[-1]}", end=" ")
             try:
                 tm = DecoupledTransferMatrix(self.get_tm(data["tm"]))
                 beta = tm.get_beta(0)
+                print(f"... found beta {beta}")
+                print(tm)
             except Exception:
                 beta = 0.0
+                print(f"... did not find beta {beta}")
+                #sys.excepthook(*sys.exc_info())
             if beta < self.beta_limit:
                 y_list.append(beta)
             else:
@@ -236,7 +291,7 @@ class PlotG4BL(object):
         axes.plot(x_list, y_list, "o-", label="Estimated $\\beta_{\\perp}$ [mm]", c="grey")
         axes.set_ylabel("$\\beta_{\\perp}$ [mm]", fontsize=20)
         axes.tick_params(labelsize=14)
-        axes.set_ylim(0, 4000.0)
+        axes.set_ylim(self.beta_lim)
 
     def plot_eps_eqm(self, axes, centile):
         x_key = self.key_list[0]
@@ -262,12 +317,14 @@ class PlotG4BL(object):
             eps_eqm_const = 13.6**2/l_r/2/mass/dedx
             eps_eqm = eps_eqm_const*beta/beta_rel
             contour = eps_eqm*centile_amplitude
+            if beta > self.beta_limit:
+                contour = 0.0
             x_list.append(data["variables"][x_key])
             y_list.append(contour)
             print(centile, centile_amplitude, eps_eqm, contour)
-        label = "4 $\\times \\varepsilon_{eqm}$"
+        label = "$\\mathrm{A_{4d}} = 4 \\times \\varepsilon_{eqm}$ "
         if not centile is None:
-            label = f"{centile*100} centile"
+            label = f"$\\mathrm{{A_{{4d}}}}$ = {centile*100:.2g}$^{{th}}$ centile of eqm distribution"
         axes.plot(x_list, y_list, "o-", label = label)
 
     def plot_a4d_ratio(self, variables, a_4d_good, a_4d_all):
@@ -297,7 +354,7 @@ class PlotG4BL(object):
                 if all_hist[j]:
                     weight.append(good_hist[j]/all_hist[j])
                 else:
-                    weight.append(1.0)
+                    weight.append(float("nan"))
         figure = matplotlib.pyplot.figure(figsize=(20,10))
         axes = figure.add_subplot(1, 1, 1)
         hist = axes.hist2d(x_value, y_value, [x_bins, y_bins], weights=weight, label="survival probability")
@@ -319,8 +376,8 @@ class PlotG4BL(object):
         cb.ax.tick_params(labelsize=14)
         cb.set_label("Survival Probability", fontsize=20)
         #cb.tick_params(labelsize=14)
-        axes.legend(loc="upper left")
-        beta_axes.legend(loc="center left")
+        axes.legend(loc=[0.1, 0.8], fontsize=14)
+        beta_axes.legend(loc=[0.1, 0.7], fontsize=14)
         figure.savefig(os.path.join(self.plot_dir, "amplitude_ratio_"+self.short_form[var_key]+".png"))
 
     short_form = {
@@ -365,30 +422,41 @@ def do_plot(run_dir, args):
     run_dir_glob = fname(run_dir, args, False)
     title = run_dir_glob.replace(";_", " ")
     title = title.split("/")[-1]
-    plot_dir = fname(run_dir+"/plot_amplitude_2_", args, True)
+    plot_dir = fname(run_dir+"/plot_amplitude_", args, True)
     file_name = "track_beam_amplitude/da_scan//output*.txt"
     co_file_name = "closed_orbits_cache"
-    cell_length = 1600.0 # full cell length
+    cell_length = 2000.0 # full cell length
     if "cell_length" in args:
         cell_length = float(args["cell_length"])
     file_format = "icool_for009"
+    print(f"PLOT DIR {plot_dir}")
     plotter = PlotG4BL(run_dir_glob, co_file_name, cell_length, file_name, file_format, plot_dir, 40.0)
     plotter.title = title
     plotter.beta_limit = 1e4
     plotter.variables_of_interest = ["__momentum__"]
-    plotter.a_4d_max = 160
+    plotter.a_4d_max = 60
+    plotter.beta_lim = [0.0, 1000.0]
     plotter.n_a4d_bins = 20
-    plotter.do_plots(1, 20)
+    input_station = 1
+    output_station = 100
+    plotter.do_plots(input_station, output_station)
+    print(f"Plots went in {plot_dir}")
 
 def main():
-    run_dir = "output/demo_oct24_v2/"
-    cell_length = 2000
-    args = [
-        ("pz_beam", "*"),
-        ("harmonics", "(7.5)"), # , 3.0, 2.7
-        ("cell_length", "2000"),
-    ]
-    do_plot(run_dir, args)
+    run_dir = "output/demo_apr25_v028/"
+    for by in ["0.1"]:
+        for dp_pos in ["0.025", "0.05", "0.1", "0.15", "0.2", "0.225"]:
+            for dp_length in ["200"]:
+                try:
+                    args = [
+                        ("pz", "*"),
+                        ("by", by),
+                        ("dp_pos", dp_pos),
+                        ("dp_length", dp_length),
+                    ]
+                    do_plot(run_dir, args)
+                except Exception:
+                    sys.excepthook(*sys.exc_info())
 
 if __name__ == "__main__":
     main()
