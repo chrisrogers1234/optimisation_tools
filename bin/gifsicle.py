@@ -26,18 +26,32 @@ class Gifseriser:
             item_list.append(item)
         return item_list
 
+    def setup_gif_dir(self, item_list):
+        src_dir = os.path.split(item_list[0]["file_name"])[0]
+        gif_dir = f"{src_dir}/gifsicle/"
+        if os.path.exists(gif_dir):
+            return gif_dir
+        os.makedirs(gif_dir)
+        return gif_dir
+
+
     def generate_gif(self, item_list, output_file_name):
         gif_file_list = []
+        gif_dir = self.setup_gif_dir(item_list)
         print()
         for item in item_list:
             file_name = item["file_name"]
             gif_file_name = file_name.replace(".png", ".gif")
+            gif_file_name = os.path.split(gif_file_name)[1]
+            gif_file_name = f"{gif_dir}/{gif_file_name}"
             if not os.path.exists(gif_file_name):
                 subprocess.check_output(["convert",  file_name, gif_file_name])
                 print("\rConverting", file_name, gif_file_name, end=" ")
             gif_file_list.append(gif_file_name)
         print()
-        proc = subprocess.run(["gifsicle", f"--delay={self.delay}", "--output="+output_file_name, f"--loopcount={self.loop_count}"]+gif_file_list)
+        command = ["gifsicle", f"--delay={self.delay}", "--output="+output_file_name, f"--loopcount={self.loop_count}"]+gif_file_list
+        print(f"running command\n  "+" ".join(command))
+        proc = subprocess.run(command)
 
 def generate_webp(input_glob, output_file_name, frame_duration):
     png_file_list = []
@@ -61,24 +75,41 @@ def generate_webp(input_glob, output_file_name, frame_duration):
 
 def main_not():
     gifseriser = Gifseriser()
-    gifseriser.delay = 10
-    run_dir = "output/rf_capture_v21/"
-    for prefix in ["dt_vs_e"]:#, "t_vs_e"]:
-        item_list = gifseriser.get_files(run_dir+prefix+"_*.png", [run_dir, ".png"])
-        item_list = sorted(item_list, key = lambda item: item["file_name"]) # float(item["kv_list"]["z"]))
-        print(json.dumps(item_list, indent=2))
-        out_file = run_dir+"animation_"+prefix+".gif"
-        gifseriser.generate_gif(item_list, out_file)
-        print("Output in", out_file)
+    gifseriser.delay = 20
+    run_dir_glob = "/home/cr67/work/2025-01-01_low-energy-cooling/rogers-low-energy-cooling/output/induction_v47/name=run*/"
+    for run_dir in glob.glob(run_dir_glob):
+        for prefix in [f"time_z-ke", "time_x-px"]: #"plane_{prefix}"
+            glob_file = f"{run_dir}/{prefix}_*.png"
+            #glob_file = f"{run_dir}/*.png"
+            item_list = glob.glob(glob_file)#gifseriser.get_files(run_dir+prefix+"_*.png", [run_dir, ".png"])
+            item_list = [{"file_name":item} for item in item_list]
+            item_list = sorted(item_list, key = lambda item: item["file_name"]) # float(item["kv_list"]["z"]))
+            if len(item_list) == 0:
+                print(f"Failed to find anything in glob {glob_file}")
+            print(json.dumps(item_list, indent=2))
+            out_file = run_dir+"animation_"+prefix+".gif"
+            gifseriser.generate_gif(item_list, out_file)
+            print("Output in", out_file)
 
 def main():
     gifseriser = Gifseriser()
     gifseriser.delay = 10
-    run_dir = "output/voltage_bump_v13/"
-    glob_file = f"{run_dir}longitudinal_*png"
-    run_dir = "output/tomography_test_1"
-    glob_file = f"{run_dir}//hist2d_*.png"
-    generate_webp(glob_file, f"{run_dir}/animation.webp", 100)
+    #dir_glob = "/home/cr67/work/2020-07-06_mc/final_cooling/low-energy-cooling/output/induction_v14/1/0/"
+    #dir_glob = "/home/cr67/work/2020-07-06_mc/final_cooling/low-energy-cooling-g4bl/g4bl_low_energy_cooling/plots/"
+    dir_glob = "/home/cr67/work/2017-07-07_isis2/horizontal_isis3/output/foil_heating_test_fets_ring_v2/"
+    for a_dir in glob.glob(dir_glob):
+        run_dir = a_dir
+        #glob_file = f"{run_dir}/plane_*.png"
+        glob_file = f"{run_dir}/foil_temp_*.png"
+        #glob_file = f"{run_dir}/z_vs_kinetic_energy_*.png"
+        generate_webp(glob_file, f"{run_dir}/animation.webp", 100)
+    return
+
+    for a_dir in glob.glob("output/2024-12-21_v4/job_0111"):
+        run_dir = a_dir
+        glob_file = f"{run_dir}/longitudinal_*.png"
+        generate_webp(glob_file, f"{run_dir}/longitudinal_animation.webp", 500)
+
 
 if __name__ == "__main__":
-    main()
+    main_not()
