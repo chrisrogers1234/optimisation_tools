@@ -15,6 +15,7 @@ import xboa.common
 import optimisation_tools.analysis.find_closed_orbits_4d
 import optimisation_tools.analysis.find_tune
 import optimisation_tools.analysis.find_da
+import optimisation_tools.analysis.optimisation
 import optimisation_tools.analysis.find_bump_parameters
 import optimisation_tools.analysis.build_bump_surrogate_model
 import optimisation_tools.analysis.track_bump
@@ -30,6 +31,7 @@ MODULES = [
     ("build_bump_surrogate_model", optimisation_tools.analysis.build_bump_surrogate_model),
     ("track_bump", optimisation_tools.analysis.track_bump),
     ("track_beam", optimisation_tools.analysis.track_beam),
+    ("optimisation", optimisation_tools.analysis.optimisation),
 ]
 
 def output_dir(config, config_file_name):

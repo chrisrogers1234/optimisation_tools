@@ -86,6 +86,8 @@ def dict_compare(list_of_dicts, include_missing=True, float_tolerance=1e-9):
     differ by the small amount
     """
     delta_keys = []
+    if len(list_of_dicts) == 0:
+        return set()
     dict_1 = list_of_dicts[0]
     for dict_2 in list_of_dicts[1:]:
         for key in dict_1:
