@@ -37,7 +37,7 @@ class ToyModel(object):
         #Run 101 with args [0.2116535191136668, -1.1802958558145478, 1.5605421957991457]Y MAX 10.0
         # injection setup
         self.momentum = 75.
-        self.rf_reference_momentum = 75*(1.002) # used to calculate RF frequency and plot RF buckets/etc
+        self.rf_reference_momentum = 75.0 # used to calculate RF frequency and plot RF buckets/etc
         self.max_turn = n_turns
         self.number_pulses = n_injection_turns
         self.number_per_pulse = 1000
@@ -107,6 +107,7 @@ class ToyModel(object):
         self.seed = None
         self.is_horizontal = True # horizontal excursion or vertical
         self.beam_filename = "beam_at_end.txt"
+        self.foil_hits_filename = "foil_hits.txt"
 
         self.real_range = [25.0*self.amp_scale, 0.05*self.amp_scale, 25.0*self.amp_scale, 0.025*self.amp_scale]
         self.real_centre = [0.0*self.amp_scale, 0.0*self.amp_scale, 0.0*self.amp_scale, 0.0*self.amp_scale]
@@ -434,6 +435,12 @@ class ToyModel(object):
                     fout.write(f"{item} ")
                 fout.write(f"{self.t_data[i]} {self.dp_over_p_data[i]}\n")
 
+    def print_foil_hits(self, filename):
+        with open(filename, "w") as fout:
+            fout.write(f"N_pulses: {self.number_pulses}\n")
+            fout.write(f"N_per_pulse:  {self.number_per_pulse}\n")
+            for hit in self.foil_hit_positions:
+                fout.write(f"{hit[0]} {hit[1]}\n")
 
     def do_one_turn(self):
         self.inject_one() # inject on the injection orbit in global coordinates
@@ -711,9 +718,9 @@ class ToyModel(object):
         self.fig4 = matplotlib.pyplot.figure(figsize=(20, 10))
 
         self.axes4 = [
-            self.fig4.add_subplot(1, 2, 1),
-            self.fig4.add_subplot(2, 2, 2),
-            self.fig4.add_subplot(2, 2, 4),
+            self.fig4.add_subplot(1, 2, 1,  position=[0.06, 0.10, 0.45, 0.80]),
+            self.fig4.add_subplot(2, 2, 2,  position=[0.60, 0.10, 0.35, 0.35]),
+            self.fig4.add_subplot(2, 2, 4,  position=[0.60, 0.55, 0.35, 0.35]),
         ]
         self.axes2 = [
             self.fig2.add_subplot(2, 3, 1,  position=[0.06, 0.55, 0.26, 0.35]),
@@ -724,17 +731,17 @@ class ToyModel(object):
             self.fig2.add_subplot(2, 3, 6,  position=[0.70, 0.10, 0.26, 0.35]),
         ]
         self.axes = [
-            self.fig.add_subplot(2, 3, 1,  position=[0.06, 0.55, 0.26, 0.35]),
-            self.fig.add_subplot(2, 6, 7,  position=[0.06, 0.15, 0.10, 0.30]),
-            self.fig.add_subplot(2, 6, 8,  position=[0.22, 0.15, 0.10, 0.30]),
-            self.fig.add_subplot(2, 3, 2,  position=[0.38, 0.55, 0.26, 0.35]),
-            self.fig.add_subplot(2, 6, 9,  position=[0.38, 0.10, 0.10, 0.35]),
-            self.fig.add_subplot(2, 6, 10, position=[0.54, 0.10, 0.10, 0.35]),
-            self.fig.add_subplot(2, 3, 3,  position=[0.70, 0.55, 0.26, 0.35]),
-            self.fig.add_subplot(2, 6, 11, position=[0.70, 0.10, 0.10, 0.35]),
-            self.fig.add_subplot(2, 6, 12, position=[0.86, 0.10, 0.10, 0.35]),
-            self.fig.add_subplot(2, 7, 13,  position=[0.06, 0.10, 0.10, 0.05]),
-            self.fig.add_subplot(2, 7, 14,  position=[0.22, 0.10, 0.10, 0.05]),
+            self.fig.add_subplot(2, 3, 1,  position=[0.06, 0.10, 0.45, 0.80]),
+            self.fig.add_subplot(2, 6, 7,  position=[0.60, 0.20, 0.35, 0.25]),
+            self.fig.add_subplot(2, 6, 8,  position=[0.60, 0.65, 0.35, 0.25]),
+            self.fig.add_subplot(2, 3, 2,  position=[1.38, 0.55, 0.26, 0.35]),
+            self.fig.add_subplot(2, 6, 9,  position=[1.38, 0.10, 0.10, 0.35]),
+            self.fig.add_subplot(2, 6, 10, position=[1.54, 0.10, 0.10, 0.35]),
+            self.fig.add_subplot(2, 3, 3,  position=[1.70, 0.55, 0.26, 0.35]),
+            self.fig.add_subplot(2, 6, 11, position=[1.70, 0.10, 0.10, 0.35]),
+            self.fig.add_subplot(2, 6, 12, position=[1.86, 0.10, 0.10, 0.35]),
+            self.fig.add_subplot(2, 7, 13,  position=[0.60, 0.10, 0.35, 0.10]),
+            self.fig.add_subplot(2, 7, 14,  position=[0.60, 0.55, 0.35, 0.10]),
         ]
         #self.axes[9] = matplotlib.axes.Axes(self.fig, [0.06, 0.10, 0.10, 0.35])
         #self.axes[10] = matplotlib.axes.Axes(self.fig, [0.22, 0.10, 0.10, 0.35])
@@ -867,7 +874,8 @@ class ToyModel(object):
             [-self.aa_range[1]+self.aa_centre[1], self.aa_range[1]+self.aa_centre[1]],
             [-self.aa_range[3]+self.aa_centre[3], self.aa_range[3]+self.aa_centre[3]],
         ]
-        n_bins = int(max(20, len(r_list)/10))
+        n_bins = int(max(20, len(r_list)/10)) # between 20 and 100
+        n_bins = int(min(n_bins, 100))
         n_bins_2d = int(max(20, int(len(r_list)**0.5/5) ) )
 
         axes.hist2d(u_list, v_list, n_bins_2d, axis_range_2d)
@@ -956,6 +964,7 @@ class ToyModel(object):
         mean_h = numpy.mean(self.foil_hits)
         self.output["mean_foil_hits"] = mean_h
         self.output["max_foil_hits"] = max(self.foil_hits)
+        self.output["foil_edge"] = self.foil_edge
 
         sigma_dp = numpy.std(self.dp_over_p_data)
         self.output["rms_dp_over_p"] = sigma_dp
@@ -1280,6 +1289,7 @@ class ToyModel(object):
     def finalise(self, will_clear = True):
         if self.beam_filename:
             self.print_beam(self.output_dir+self.beam_filename)
+            self.print_foil_hits(self.output_dir+self.foil_hits_filename)
         if not self.do_plots:
             return
         self.plot_foil_hits(self.real_range, self.real_centre)
@@ -1298,4 +1308,4 @@ class ToyModel(object):
             self.fig4.clear()
             matplotlib.pyplot.close(self.fig4)
 
-    amp_scale = 3.0 # scaling for axes
+    amp_scale = 2.0 # scaling for axes

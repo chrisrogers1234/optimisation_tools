@@ -31,4 +31,4 @@ class BeamFactory(object):
         p = Particle(t, energy, BeamFactory.mass)
         return p
 
-    mass = 938.272
+    mass = 938.27208943

@@ -7,6 +7,7 @@ class FFAModel(transport.longitudinal_model.LongitudinalModel):
     def __init__(self):
         super().__init__()
         self.k = 1 # gradient
+        self.injection_momentum = 75.0
 
     def path_length(self, a_particle):
         """Return path length in mm"""

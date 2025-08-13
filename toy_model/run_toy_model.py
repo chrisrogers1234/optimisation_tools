@@ -51,7 +51,7 @@ def toy_models_single_turn_injection(foil_n_turns_list, my_dir):
         }
         yield config
 
-def toy_models_painting(angle_u, angle_v, a_dir, is_correlated, n_injection_turns, version, config_update):
+def toy_models_painting(angle_u, angle_v, a_dir, is_correlated, n_injection_turns, version, injection_amplitude, config_update):
     if is_correlated:
         study = "correlated_painting"
     else:
@@ -60,7 +60,7 @@ def toy_models_painting(angle_u, angle_v, a_dir, is_correlated, n_injection_turn
     n_turns = n_injection_turns+n_trajectory_turns
     output_dir = a_dir+f"/test_toy_models_{study}_v{version}/"
     foil = 20e-6
-    injection_amplitude = 0.01
+    #injection_amplitude = 0.01
     if is_correlated:
         injection_scale = [i**0.5/(n_injection_turns-1)**0.5 for i in range(n_injection_turns+1)]
     else:
@@ -74,6 +74,7 @@ def toy_models_painting(angle_u, angle_v, a_dir, is_correlated, n_injection_turn
     bumps = [["action_angle", angle_u, scale*injection_amplitude, 0.0, 0.0] for scale in injection_scale]
     bumps += [["delta", 20.0/n_trajectory_turns, 0.05/n_trajectory_turns, 0.0, 0.0] for i in range(n_trajectory_turns)]
     config = {
+        "beam_pulses":[[0.5-100.0/979.2889189321706, 0.5+100.0/979.2889189321706]],
         "verbose":1,
         "max_turn":n_turns,
         "calculated_bumps":bumps,
@@ -82,7 +83,7 @@ def toy_models_painting(angle_u, angle_v, a_dir, is_correlated, n_injection_turn
         "foil_column_density":foil,
         "output_dir":output_dir,
         "number_pulses":n_injection_turns,
-        "number_per_pulse":int(100000/n_injection_turns),
+        "number_per_pulse":int(10000/n_injection_turns),
         "closed_orbit":"output/2023-03-01_baseline/baseline/closed_orbits_cache",
         "injection_ellipse_algorithm":"transfer_matrix",
         "beta_x":2.0,
@@ -127,54 +128,57 @@ def save_output(output, my_dir):
                 print(key, value, end="  ")
             print()
     #a_dir, version = the_dir(my_dir)
-    fout = open(my_dir+"/run_summary_list.json", "w")
+    fout = open(my_dir+"/run_summary_dict.json", "w")
     fout.write(json.dumps(output, indent=2))
 
 def main():
-    output = []
     #a_dir = "output/2023-03-01_baseline/baseline/toy_model_single_turn/"
     #foil_n_turns_list = [(20e-6, n) for n in [50]]
     #toy_models = [toy for toy in toy_models_single_turn_injection(foil_n_turns_list, a_dir)]
 
-    a_dir = "output/2023-03-01_baseline/toy_model_painting_v20/"
+    a_dir = "output/2023-03-01_baseline/toy_model_painting_v29/"
     config_list = []
+    version = 1
+    dt = 250
+    t_offset = 50.0
+    rf_voltage = 2.0e-3
     for is_correlated in [False, True]:
-        version = 1
-        for rf_voltage_i in range(0, 1, 2):
-            rf_voltage = rf_voltage_i*1e-3
-            for amplitude_acceptance_i in range(4, 5, 4):
-                amplitude_acceptance = amplitude_acceptance_i*0.005
-                for dp_i in range(0, 1, 2):
-                    dp = (1+dp_i*1e-3)*75
-                    for n_injection_turns in range(50, 101, 100):
-                        version = n_injection_turns
-                        config = {
-                            "angle_u":math.pi/2,
-                            "angle_v":0*math.pi/2*0.92,
-                            "a_dir":a_dir,
-                            "is_correlated":is_correlated,
-                            "n_injection_turns":n_injection_turns,
-                            "version":version,
-                            "config_update":{
-                                "rf_reference_momentum":dp,
-                                "rf_voltage":rf_voltage,
-                                "amplitude_acceptance":amplitude_acceptance,
-                                "output_dir":a_dir+f"/corr={is_correlated}_dp={dp}_n-turns={n_injection_turns}/",
-                                "plot_frequency":1e9,
-                                "do_movie":False
-                            },
-                        }
-                        config_list.append(config)
+        for ai in range(1, 21):
+            amplitude = ai/1000
+            amplitude_acceptance = 0.020
+            n_injection_turns = 50
+            version = n_injection_turns
+            config = {
+                "angle_u":math.pi/2,
+                "angle_v":0,
+                "a_dir":a_dir,
+                "is_correlated":is_correlated,
+                "n_injection_turns":n_injection_turns,
+                "version":version,
+                "injection_amplitude":amplitude,
+                "config_update":{
+                    "rf_reference_momentum":75.0,
+                    "rf_voltage":rf_voltage,
+                    "amplitude_acceptance":amplitude_acceptance,
+                    "output_dir":a_dir+f"/corr={is_correlated}_amplitude={ai:02d}_thin_foil/",
+                    "plot_frequency":1000,
+                    "do_movie":False,
+                    "beam_pulses":[[0.5+(t_offset-dt)/2/996.1326883378041, 0.5+(t_offset+dt)/2/996.1326883378041]],
+                    "beta_x":-1, # disabled
+                    "beta_y":-1, # disabled
+                    "injection_ellipse_algorithm":"transfer_matrix",
+                    "foil_column_density":5e-6,
+                },
+            }
+            config_list.append(config)
 
-    for i, config in enumerate(config_list):
+    for i, config in enumerate(config_list[:]):
         toy_model = toy_models_painting(**config)
         out_dict = run_one(toy_model, i != len(config_list)-1)
         config.update(toy_model)
         out_dict["config"] = config
-        output.append(out_dict)
-        if i < 3:
-            save_output(output, a_dir)
-    save_output(output, a_dir)
+        output_dir = config["output_dir"]
+        save_output(out_dict, output_dir)
     matplotlib.pyplot.show(block=False)
     input("Press <CR> to finish")
 

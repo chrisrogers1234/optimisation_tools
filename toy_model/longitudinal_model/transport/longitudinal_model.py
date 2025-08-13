@@ -15,7 +15,6 @@ class LongitudinalModel(object):
         self.phi0 = 0.0 # rad
         self.mass = beam.beam_factory.BeamFactory.mass # MeV/c^2
         self.c_light = 299.792458 # mm/ns
-        self.injection_momentum = 369.121 # MeV/c
         self.harmonic_number = 1
         self.rf_program = None
 

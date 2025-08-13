@@ -10,7 +10,7 @@ class DataHandler(object):
         self.dir_name_glob = file_name_glob
         self.sort_key_list = sort_key_list # distinguish datasets
         self.x_key = x_key # sort each individual dataset
-        self.run_summary_fname = "run_summary_list.json" # output from toy model
+        self.run_summary_fname = "run_summary_dict.json" # output from toy model
         self.optimiser_results = "optimiser.json" # output from optimiser
         self.optimiser_keys = ["angle_u", "angle_v", "foil_angle", "beta_x", "alpha_x", "beta_y", "alpha_y"]
 
@@ -19,7 +19,7 @@ class DataHandler(object):
         print("Globbing", self.dir_name_glob, "gives", len(dir_name_list), "files")
         self.output_list = []
         for item in dir_name_list: 
-            self.output_list += self.load_run_summary(item)
+            self.output_list.append(self.load_run_summary(item))
         print("Loaded "+str(len(self.output_list))+" files with keys")
         for key in sorted(self.output_list[0].keys()):
             print(key)
@@ -48,6 +48,7 @@ class DataHandler(object):
         try:
             fin = open(file_name)
             output = json.loads(fin.read())
+            print("Loaded", output)
             return output
         except Exception:
             print("Failed to open", file_name)
@@ -115,14 +116,16 @@ class Plotter(object):
         self.x_key = x_key
         self.sort_key_list = sort_key_list
         self.colors = ['b', 'g', 'xkcd:slate', 'xkcd:pinkish', 'orange',]# 'r']
-        self.xlabel = "Number of turns"
+        self.xlabel = "A$_{nom}$ [mm]"
         self.ylabel = "Foil hits"
         self.y_keys = ["mean_foil_hits", "max_foil_hits"] # can also be a list of functions
-        self.linestyles = ["dotted", "dashed", "dashdot"]
+        self.linestyles = [] #["dotted", "dashed", "dashdot"]
+        self.markers = ["o", "^", "v"]
         self.sort_name = sort_name_list
         self.sort_units = sort_unit_list
         self.file_name = "foil_hits.png"
         self.y_lim = None
+        self.y_nicks = None
 
     def do_plots(self, data_set_list, do_log, print_data=False):
         try:
@@ -152,18 +155,20 @@ class Plotter(object):
 
             for j, y_key in enumerate(self.y_keys):
                 linestyle = self.linestyle(i)
+                marker = self.marker(j)
                 y_values = [self.get_value(data, y_key) for data in data_set]
                 if do_log:
-                    func = axes.semilogy
+                    axes.set_yscale("log")
+                if linestyle == "":
+                    func = axes.scatter
                 else:
                     func = axes.plot
-                if j == 0:
-                    my_label = ""
-                    for i, name in enumerate(self.sort_name):
-                        my_label += f"{name} {sort_value[i]} {self.sort_units[i]}"
-                else:
-                    my_label = None
-                func(x_values, y_values, color=color, linestyle=linestyle, label=my_label)
+                my_label = ""
+                if self.y_nicks:
+                    my_label += self.y_nicks[j]+" "
+                for i, name in enumerate(self.sort_name):
+                    my_label += f"{name} {sort_value[i]} {self.sort_units[i]}"
+                func(x_values, y_values, color=color, linestyle=linestyle, marker=marker, label=my_label)
                 if print_data:
                     print(y_key, y_values)
         if self.y_lim != None:
@@ -175,7 +180,17 @@ class Plotter(object):
         i %= len(self.colors) 
         return self.colors[i]
 
+    def marker(self, i):
+        if len(self.markers) == 0:
+            return ""
+        while i >= len(self.markers):
+            i -= len(self.markers)
+        style = self.markers[i]
+        return style
+
     def linestyle(self, i):
+        if len(self.linestyles) == 0:
+            return ""
         j = int(i/len(self.colors))
         j %= len(self.linestyles)
         style = self.linestyles[j]
@@ -199,18 +214,22 @@ def plots(data_set_list, out_dir, sort_key_list, sort_name_list, sort_unit_list,
     plotter.colors = plotter.colors[:n_colours]
 
     plotter.out_dir = out_dir+"/"
-    plotter.xlabel = "number of injection turns"
+    plotter.xlabel = "Maximum injected amplitude $A_{nom}$ [mm]"
 
     plotter.ylabel = "Foil hits"
     plotter.y_keys = ["mean_foil_hits", "max_foil_hits"]
+    plotter.y_nicks = ["Mean hits", "Max hits"]
     plotter.file_name = "foil_hits.png"
     plotter.do_plots(data_set_list, False)
 
-    plotter.ylabel = "RMS Emittance [$\\mu m$]"
+    plotter.ylabel = "RMS Emittance [mm]"
     plotter.y_keys = ["rms_emittance_u", "rms_emittance_v"]
-    plotter.y_lim = [0.0, 5.0]
+    plotter.y_nicks = ["$\\varepsilon_x$", "$\\varepsilon_y$"]
+    plotter.y_lim = [0.0, 10.0e-3]
     plotter.file_name = "rms_emittance.png"
     plotter.do_plots(data_set_list, False)
+    plotter.y_nicks = None
+
 
     plotter.ylabel = "99 % Amplitude [$\\mu m$]"
     plotter.y_keys = ["amplitude_u_1e-2", "amplitude_v_1e-2"]
@@ -278,18 +297,18 @@ def plots(data_set_list, out_dir, sort_key_list, sort_name_list, sort_unit_list,
 
 
 def main():
-    dir_base = "output/2023-03-01_baseline/toy_model_painting_v18"
-    file_glob = dir_base
-    out_dir = dir_base+"/"
+    dir_base = "output/2023-03-01_baseline/toy_model_painting_v29"
+    file_glob = dir_base+"/corr=*_amplitude=??_thin_foil/"
+    out_dir = dir_base+"/plots/"
     #file_glob = "output/triplet_baseline/single_turn_injection/toy_model_2/*/run_summary.json"
 #    sort_key_list = [lambda x: x["config"]["is_correlated"], "amplitude_acceptance"]
 #    sort_name_list = ["Corr:", "Acceptance"]
 #    sort_unit_list = ["", "$\\mathrm{\\mu}$m"]
-    sort_key_list = [lambda x: x["config"]["is_correlated"], "rf_voltage"]
-    sort_name_list = ["Corr:", "V$_{rf}$"]
-    sort_unit_list = ["", "MV"]
+    sort_key_list = [lambda x: x["config"]["is_correlated"]]
+    sort_name_list = ["Corr:"]
+    sort_unit_list = [""]
     n_colours = 2
-    x_key = "number_pulses"
+    x_key = "injection_amplitude"
 
     data_handler = DataHandler(file_glob, sort_key_list, x_key)
     data_handler.load_output_list()

@@ -6,16 +6,15 @@ import transport.longitudinal_model
 class SynchrotronModel(transport.longitudinal_model.LongitudinalModel):
     def __init__(self):
         super().__init__()
-        self.phase_slip = -0.826
-        self.momentum_min = 369.131 # 70 MeV
-        self.momentum_max = self.momentum_min
-        self.magnet_period = 20e6 # ns
-        self.t0 = 0.0 # point at which field is at minimum
-        #1463.2960055983203
+        self.phase_slip = -0.826 # particle revolution frequency df/f = - [phase_slip] dp/p
+        self.momentum_min = 369.131 # momentum at ramp start
+        self.momentum_max = self.momentum_min # momentum at ramp end
+        self.magnet_period = 20e6 # ns time taken for the field to go through a complete oscillation (ramp up and down)
+        self.magnet_minimum = 0.0 # ns time at which field is at minimum
 
     def get_magnet_momentum(self, t):
         momentum_swing = self.momentum_max-self.momentum_min
-        magnet_phase = 2*math.pi*(t-self.t0)/self.magnet_period-math.pi/2.0
+        magnet_phase = 2*math.pi*(t-self.magnet_minimum)/self.magnet_period-math.pi/2.0
         p_magnet = momentum_swing*(math.sin(magnet_phase)+1)/2+self.momentum_min
         return p_magnet
 

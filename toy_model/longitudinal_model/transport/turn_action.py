@@ -16,7 +16,7 @@ class TurnAction(object):
         suffix = str(turn).rjust(4, "0")
         self.plotter.output_directory = self.output_directory
         if turn % self.plot_frequency == 0:
+            print("Doing turn action on turn", turn)
             figure = self.plotter.plot_beam(particle_collection, self.plot_contours, suffix)
             matplotlib.pyplot.close(figure)
         self.monitor.do_one_turn(turn, particle_collection)
-        print("Turn", turn)

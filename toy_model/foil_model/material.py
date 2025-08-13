@@ -19,13 +19,13 @@ class Material(object):
         self.stripping_algorithm = "saha"
         self.straggling_hermite = None
 
-    def set_material(self, material_name):
+    def set_material(self, material_name, density_factor=1):
         fin = open(self.materials_file)
         materials = fin.read()
         materials = json.loads(materials)
         my_mat = materials[material_name]
         self.name = material_name
-        self.density = my_mat["density"]
+        self.density = my_mat["density"]*density_factor
         self.ion_energy = my_mat["ion_energy"]*1e-6
         self.delta = my_mat["delta"]
         self.molecular_mass = my_mat["molecular_mass"] #*constants.units["u"]

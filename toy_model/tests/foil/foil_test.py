@@ -82,14 +82,14 @@ def energy_straggling(material, kinetic_energy, column_density):
 def scattering(material):
     particle_1 = Particle.new_from_momentum(75.0, 2212)
     particle_2 = Particle.new_from_ke(500.0, 2212)
-    thickness_1 = 20e-6/material.density
+    thickness_1 = 5e-6/material.density
     thickness_2 = 0.0016/material.density
     sigma_1 = material.scattering(particle_1, thickness_1)
     sigma_2 = material.scattering(particle_2, thickness_2)
     fig = matplotlib.pyplot.figure()
     axes = fig.add_subplot(1, 1, 1)
     scatters = numpy.random.randn(100000000)*sigma_1*1e3
-    axes.hist(scatters, bins=500, histtype='step', density=True, label = "3 MeV, 20e-6 g cm$^{-2}$"+format(sigma_1*1e3, "6.3g")+" mrad") #  "+format(sigma_1*1e3, "6.3g")+" mrad"
+    axes.hist(scatters, bins=500, histtype='step', density=True, label = "3 MeV, 5e-6 g cm$^{-2}$"+format(sigma_1*1e3, "6.3g")+" mrad") #  "+format(sigma_1*1e3, "6.3g")+" mrad"
     scatters = numpy.random.randn(100000000)*sigma_2*1e3
     axes.hist(scatters, bins=500, histtype='step', density=True, label = "400 MeV, 0.0016 g cm$^{-2}$"+format(sigma_2*1e3, "6.3g")+" mrad")
     axes.set_xlabel("Angle [mrad]", fontsize=15)
@@ -98,6 +98,25 @@ def scattering(material):
     axes.legend(fontsize=12)
 
     return fig
+
+
+def scattering_muons():
+    material = Material()
+    material.set_material("gaseous_helium", 1e-3)
+    particle_1 = Particle.new_from_momentum(200.0, -13)
+    thickness_1 = 10
+    sigma_1 = material.scattering(particle_1, thickness_1)
+    fig = matplotlib.pyplot.figure()
+    axes = fig.add_subplot(1, 1, 1)
+    scatters = numpy.random.randn(100000000)*sigma_1*1e3
+    axes.hist(scatters, bins=500, histtype='step', density=True, label = "200.0 MeV/c muons in He @ 0.001 stp"+format(sigma_1*1e3, "6.3g")+" mrad") #  "+format(sigma_1*1e3, "6.3g")+" mrad"
+    axes.set_xlabel("Angle [mrad]", fontsize=15)
+    axes.set_ylabel("Number density [mrad$^{-1}$]", fontsize=15)
+    axes.tick_params(axis='both', labelsize = 12)
+    axes.legend(fontsize=12)
+    print("Muon sigma", sigma_1)
+    return fig
+
 
 def stripping(material, kinetic_energy, max_column_density):
     figure = matplotlib.pyplot.figure()
@@ -142,6 +161,8 @@ def foil_test():
     fig.savefig(out_dir+"foil_test_dedx.png")
     fig = scattering(foil)
     fig.savefig(out_dir+"foil_test_scattering.png")
+    fig = scattering_muons()
+    fig.savefig(out_dir+"test_scattering_muons.png")
     #dp_over_p_1 = momentum_change(foil, 3.0, 5e-6)
     #dp_over_p_2 = momentum_change(foil, 3.0, 20e-6)
     #print("Ratio", dp_over_p_1/dp_over_p_2)
