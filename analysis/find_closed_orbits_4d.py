@@ -43,6 +43,7 @@ class ClosedOrbitFinder4D(object):
         self.py_opal_setup = False
         self.minuit_score_list = []
         self.get_tracking(True)
+        print("Closed Orbit Finder 4D with energy", self.energy)
 
     def get_tracking(self, clear):
         probes = self.config_co["probe_files"]
