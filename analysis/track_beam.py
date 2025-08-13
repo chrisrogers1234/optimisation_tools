@@ -274,6 +274,8 @@ class BeamShells(BeamGen):
                 trans_list = self.get_psv_list(aa_list) # phase space vector
                 long_list = self.gen_longitudinal(len(trans_list))
                 hit_list += self.get_hit_list(trans_list, long_list) # hit
+        for hit in hit_list:
+            print("HIT", hit["px"], hit["py"], hit["pz"])
         return hit_list
 
 class BeamGrid(BeamGen):
@@ -282,6 +284,9 @@ class BeamGrid(BeamGen):
         self.beam = beam
         self.dim = len(beam["start"])
         self.reference = beam["reference"]
+        self.load_closed_orbit(beam["closed_orbit_file"])
+        if self.reference == None:
+            self.reference = self.closed_orbits[0]["seed"] + [0.0, self.beam["energy"]*1e3]
         self.start = beam["start"]
         self.stop = beam["stop"]
         self.nsteps = beam["nsteps"]
@@ -327,7 +332,7 @@ class BeamGrid(BeamGen):
         hit_dict = {"energy":energy, "mass":mass, "pid":pid}
         hit_dict["pz"] = (energy**2-mass**2)**0.5/(1+point[1]**2+point[3]**2)**0.5
         for i, var in enumerate(self.beam["variables"]):
-            hit_dict[var] = point[i]
+            hit_dict[var] = point[i]+self.reference[i]
         hit = xboa.hit.Hit.new_from_dict(hit_dict, "pz")
         return hit
 
@@ -467,7 +472,6 @@ class TrackBeam(object):
         self.tracking_store = {}
 
     def setup(self):
-        #self.beam_gen = BeamShells(self.config)
         self.hit_list = None #self.beam_gen.gen_beam()
 
     def save_tracking(self, out_dir):
@@ -528,7 +532,7 @@ class TrackBeam(object):
             print_events = self.config.track_beam["print_events"]
         for i in print_events:
             print("      Event", i, end="  ")
-            for var in ["x", "y", "z", "x'", "y'", "kinetic_energy", "t"]:
+            for var in ["x", "y", "z", "px", "py", "kinetic_energy", "t"]:
                 print(var+":", self.hit_list[i][var], end=" ")
             print()
         try:
