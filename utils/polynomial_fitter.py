@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 class PolynomialFitter(object):
     """
-    Try to find polynomial s.t.
+    Try to find polynomial such that
 
     y = y_0 + M_2 x + M_3 x * x
 
@@ -18,7 +18,7 @@ class PolynomialFitter(object):
     * M_3 is a tensor of dimension N x N x N
 
     In order to do the fitting, we use a fit vector like
-    v_0 = [m_0, m2_00 x_0, m2_01 x_1, ..., m3_000 x_0*x_0, m3_001 x_0*x_1, ...
+    v_0 = [m_0, m2_00 x_0, m2_01 x_1, ..., m3_000 x_0*x_0, m3_001 x_0*x_1, ...]
 
     v_i = [m_i, ..., m2_ij x_j,  ..., m3_ijk x_j x_k, ...]
 
@@ -37,10 +37,11 @@ class PolynomialFitter(object):
         """
         Initialise the fitter
         """
-        self._arr_d = 0
-        self.test_matrix = None
         self.is_linear = True
         self.set_n_dimensions(n_dimensions)
+
+        # just used for testing (should probably be somewhere else, never mind)
+        self.test_matrix = None
 
     def set_n_dimensions(self, n_dimensions):
         """
@@ -89,6 +90,9 @@ class PolynomialFitter(object):
         return y_data
 
     def test_data(self):
+        """
+        Generate some toy data for testing based on test_matrix
+        """
         n_points = 20
         self.test_matrix = [[random.uniform(0, 1) for i in range(self.vec_length)] for j in range(self.n_dimensions)]
         self.print_array(self.test_matrix)
@@ -137,8 +141,8 @@ class PolynomialFitter(object):
         else:
             fit_function = self.quadratic_fit_function
         for dim in range(max_dim):
-            self._arr_d = dim
-            y_data_0 = y_data[::, self._arr_d:self._arr_d+1].flatten()
+            _arr_d = dim
+            y_data_0 = y_data[::, _arr_d:_arr_d+1].flatten()
             parameters_in = [1 for i in range(self.vec_length)]
             parameters, parameter_cov = scipy.optimize.curve_fit(fit_function, x_data, y_data_0, parameters_in)
             parameters_out.append(parameters.tolist())
