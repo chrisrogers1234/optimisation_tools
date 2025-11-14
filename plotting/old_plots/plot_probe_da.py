@@ -33,7 +33,7 @@ class PlotProbes(object):
         my_config.tracking["verbose"] = 100
         my_config.tracking["station_dt_tolerance"] = 1000.0
         my_config.tracking["dt_tolerance"] = -1.0
-        my_config.tracking["analysis_coordinate_system"] = "azimuthal"
+        my_config.tracking["analysis_coordinate_system"] = "azimuthal_anticlockwise"
         self.probe_data = optimisation_tools.opal_tracking._opal_tracking.StoreDataInMemory(my_config)
         self.tracking.pass_through_analysis = self.probe_data
         self.tm_dict = {}
@@ -205,7 +205,7 @@ class PlotProbes(object):
             [0.0, max_amplitude*1.1],
         ]
 
-        figure, axis_list = optimisation_tools.utils.utilities.setup_da_figure(False)
+        figure, axis_list = optimisation_tools.utils.utilities.setup_da_figure_decoupling(False)
 
         self.plot_phase_space(axis_list[0], hit_list, not_list, 1, 3, z_axis, station, False)
         self.plot_phase_space(axis_list[1], hit_list, not_list, 1, 2, z_axis, station, True)
@@ -422,11 +422,11 @@ def main():
     #base_dir = "output/arctan_baseline/baseline_test_2/"
     #for a_dir in glob.glob(os.path.join(base_dir, "find_da/x_9")): #, "track_beam/forwards")):
     #    for probe in ["*"]: #range(1, 3):
-    base_dir = "output/2022-03-01_baseline/correlated_painting/tracking_v2"
-    globble = os.path.join(base_dir, "track_beam/injected_beam")
+    base_dir = "output/2025-08-20_sixteenfold/v1/"
+    globble = os.path.join(base_dir, "track_beam/amplitude_detuning")
     print(globble)
     for a_dir in glob.glob(globble):
-        for probe in ["RINGPROBE01", "FOILPROBE_1"]: #range(1, 3):
+        for probe in ["PROBE1",]:
             plot_dir = a_dir+"/plot_probe_da/"+probe+"/"
             if os.path.exists(plot_dir):
                 shutil.rmtree(plot_dir)

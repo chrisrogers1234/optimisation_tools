@@ -604,12 +604,12 @@ def fname(prefix, params, ignore_globs):
 
 
 def main():
-    run_dir = "output/demo_apr25_v028/"
+    run_dir = "output/demo_apr25_v023/"
     params = [
         ("pz", "*"),
         ("by", "0.2"),
-        ("dp_pos", "0.025"),
-        ("dp_length", "100"),
+        ("dp_pos", "0.08"),
+        #("dp_length", "100"),
         #("polarity", "++++"),
     ]
 

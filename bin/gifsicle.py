@@ -56,6 +56,7 @@ class Gifseriser:
 def generate_webp(input_glob, output_file_name, frame_duration):
     png_file_list = []
     file_list = sorted(glob.glob(input_glob))
+    print("Running with glob", input_glob, "and", len(file_list), "files")
     if len(file_list) > 9999:
         raise RuntimeError("Max 9999 frames supported")
     tmp_dir = tempfile.TemporaryDirectory()
@@ -71,15 +72,19 @@ def generate_webp(input_glob, output_file_name, frame_duration):
     # now slow it down
     command = ["webpmux", "-duration", str(frame_duration), tmp_name, "-o", output_file_name]
     proc = subprocess.run(command)
-    os.unlink(tmp_name)
+    try:
+        os.unlink(tmp_name)
+    except FileNotFoundError:
+        print("Failed to generate *****************************************")
 
 def main_not():
     gifseriser = Gifseriser()
-    gifseriser.delay = 20
-    run_dir_glob = "/home/cr67/work/2025-01-01_low-energy-cooling/rogers-low-energy-cooling/output/induction_v47/name=run*/"
+    gifseriser.delay = 5
+    run_dir_glob = "/home/cr67/work/2025-01-01_low-energy-cooling/structure_design/ECT_images_rect_2/"
+    run_dir_glob = "/home/cr67/work/2020-07-06_mc/final_cooling/beam_optics_evolution/output/rf_capture_v40/capture__buncher_length=100;_rotator_length=200;_n_bunches=5;_rotator_voltage=25/movie/"
     for run_dir in glob.glob(run_dir_glob):
-        for prefix in [f"time_z-ke", "time_x-px"]: #"plane_{prefix}"
-            glob_file = f"{run_dir}/{prefix}_*.png"
+        for prefix in [f"bucket_t_vs_e", f"dt_vs_e"]: #"plane_{prefix}"
+            glob_file = f"{run_dir}/{prefix}*.png"
             #glob_file = f"{run_dir}/*.png"
             item_list = glob.glob(glob_file)#gifseriser.get_files(run_dir+prefix+"_*.png", [run_dir, ".png"])
             item_list = [{"file_name":item} for item in item_list]
@@ -94,15 +99,13 @@ def main_not():
 def main():
     gifseriser = Gifseriser()
     gifseriser.delay = 10
-    #dir_glob = "/home/cr67/work/2020-07-06_mc/final_cooling/low-energy-cooling/output/induction_v14/1/0/"
-    #dir_glob = "/home/cr67/work/2020-07-06_mc/final_cooling/low-energy-cooling-g4bl/g4bl_low_energy_cooling/plots/"
-    dir_glob = "/home/cr67/work/2017-07-07_isis2/horizontal_isis3/output/foil_heating_test_fets_ring_v2/"
+    dir_glob = "/home/cr67/work/2020-07-06_mc/final_cooling/beam_optics_evolution/output/rf_capture_v48/capture__buncher_length=29;_rotator_length=113;_n_bunches=25;_rotator_voltage=17.52;_bz_ramp_length=50;_bz_out=3.509/movie/"
+    dir_glob = "/home/cr67/work/2025-01-01_low-energy-cooling/rogers-low-energy-cooling/output/induction_v5?/name=run*/"
     for a_dir in glob.glob(dir_glob):
-        run_dir = a_dir
-        #glob_file = f"{run_dir}/plane_*.png"
-        glob_file = f"{run_dir}/foil_temp_*.png"
-        #glob_file = f"{run_dir}/z_vs_kinetic_energy_*.png"
-        generate_webp(glob_file, f"{run_dir}/animation.webp", 100)
+        for prefix in ["z_t-kinetic_energy", "z_t-pz", "time_z-kinetic_energy", "time_z-pz"]: #[f"bucket_t_vs_e", f"dt_vs_e"]: #"plane_{prefix}"
+            run_dir = a_dir
+            glob_file = f"{run_dir}/{prefix}_*.png"
+            generate_webp(glob_file, f"{run_dir}/animation_{prefix}.webp", 100)
     return
 
     for a_dir in glob.glob("output/2024-12-21_v4/job_0111"):
@@ -112,4 +115,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main_not()
+    main()

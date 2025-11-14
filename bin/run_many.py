@@ -84,7 +84,7 @@ def poll_process_queue():
             logfile = open(job_log, "w")
         proc = subprocess.Popen(subproc_args, stdout=logfile, stderr=subprocess.STDOUT)
         temp_proc_queue.append((proc, job_name))
-        print("Running", subproc_args, "with log", job_log)
+        print("Running", subproc_args, "with log", job_log, "pid", proc.pid)
         time.sleep(1)
     PROC_RUNNING = temp_proc_queue
 
@@ -118,7 +118,7 @@ def poll_laptop():
         if proc.poll() == None:
             temp_proc_queue.append((proc, jobname))
         else:
-            print("\nPID", proc.pid, "finished with return code", proc.returncode)
+            print("\nPID", proc.pid, "job", jobname, "finished with return code", proc.returncode)
     sys.stdout.flush()
     return temp_proc_queue
 
@@ -150,13 +150,19 @@ def load_configs():
     config_file_name, config = utilities.get_config("run_many/")
     print("Loading configs from ", config_file_name)
     job_list = [[str(shell_arg) for shell_arg in job] for job in config.get_job()]
-    return job_list
+    try:
+        exe = config.get_script()
+        print(f"Found exe {exe}")
+    except AttributeError:
+        sys.excepthook(*sys.exc_info())
+        exe = os.path.expandvars("${OPTIMISATION_TOOLS}/bin/run_one.py")
+    return job_list, exe
 
 def main(config_file):
     global N_PROCS, TARGET_SCRIPT, UNIQUE_ID, PROC_QUEUE, WATCHPOINT, POLL_INTERVAL
     atexit.register(do_at_exit)
     archive_logs()
-    configs = load_configs()
+    configs, exe = load_configs()
     if os.getenv("OPAL_EXE_PATH") == None:
         raise ValueError("No OPAL_EXE_PATH set")
     if not os.path.exists("logs"):
@@ -166,12 +172,12 @@ def main(config_file):
     for config in configs:
         print("Setting config", config)
         log_file = config[0].split("/")[-1]
-        log_file = log_file[:-3]
+        log_file = log_file.replace(".py", "")
         if len(config) > 0:
             log_file = log_file+"_"+"_".join(config[1:])
         if config[0] == WATCHPOINT:
             PROC_QUEUE.append( ([WATCHPOINT], WATCHPOINT) )
-        run_one = os.path.expandvars("${OPTIMISATION_TOOLS}/bin/run_one.py")
+        run_one = exe
         proc_tuple = (["python", run_one]+config, log_file)
         PROC_QUEUE.append(proc_tuple)
     print(len(PROC_QUEUE), "jobs")

@@ -279,7 +279,7 @@ class PlotDumpFields(object):
               red   = [r0, 0.2, 1.0, 0.9, r1]
               green = [g0, 1.0, 1.0, 0.93, g1]
               blue  = [b0, 0.2, 1.0, 0.6, b1]
-          elif min_z/max_z < 1e-3 and min_z >= 0.:
+          elif max_z > 0. and min_z/max_z < 1e-3 and min_z >= 0.:
               stops = [0.0000, 1e-2, 1.0]
               red   = [1.0, 0.9, r1]
               green = [1.0, 0.93, g1]
@@ -367,19 +367,19 @@ class LogFileStripper(object):
 
     root_objects = []
 
-def main(a_dir = None):
-    plotter = PlotDumpFields(a_dir+"/FieldMapXY.dat", False)
+def main(a_file = None):
+    plotter = PlotDumpFields(a_file, True)
     canvas_xy = plotter.plot()
-    canvas_xy.Print("bz_vs_xy.png")
-    canvas_xy = plotter.plot_dump_fields("x", "y", "bx")
-    canvas_xy.Print("bx_vs_xy.png")
-    canvas_xy = plotter.plot_dump_fields("x", "y", "by")
-    canvas_xy.Print("by_vs_xy.png")
-    canvas_1d, hist, graph = plotter.plot_1d({"y":0.1}, "x", "bz")
-    canvas_1d.Print("bz_vs_x.png")
+    canvas_xy.Print("bz_vs_rphi.png")
+    #canvas_xy = plotter.plot_dump_fields("x", "y", "bx")
+    #canvas_xy.Print("bx_vs_xy.png")
+    #canvas_xy = plotter.plot_dump_fields("x", "y", "by")
+    #canvas_xy.Print("by_vs_xy.png")
+    canvas_1d, graph = plotter.plot_1d({"r":4.42}, "phi", "bz")
+    canvas_1d.Print("bz_vs_r.png")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2  or not os.path.isdir(sys.argv[1]):
+    if len(sys.argv) < 2  or not os.path.isfile(sys.argv[1]):
         print("Usage: 'python plot_dump_fields path/to/target/directory'")
     else:
         target_directory = sys.argv[1]

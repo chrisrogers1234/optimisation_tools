@@ -165,7 +165,7 @@ def setup_tracking(config, probes, ref_energy):
     else:
         raise ValueError(f"Did not recognise tracking code {config.tracking['tracking_code']}")
 
-def setup_tracking_opal():
+def setup_tracking_opal(config, probes, ref_energy):
     ref_hit = reference(config, ref_energy)
     opal_exe = os.path.expandvars(config.tracking["opal_path"])
     lattice = config.tracking["lattice_file_out"]

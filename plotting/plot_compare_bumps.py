@@ -191,6 +191,7 @@ class MultiPlot(object):
 
     def get_dax(self, verbose=False):
         self.delta_ax_list = [0]*len(self.base_dir_list)
+        print("GETTING LIST of length", len(self.base_dir_list))
         self.aa_co_list = [[None, None]]*len(self.base_dir_list)
         dax_station = self.delta_ax_station
         injection_orbit_name = os.path.join(self.injection_orbit_dir, "closed_orbits_cache")
@@ -356,6 +357,12 @@ class MultiPlot(object):
         #figure.colorbar(tricont)
         nx_points, min_x, max_x = plot.PlotUtils.hist_range(x_list)
         ny_points, min_y, max_y = plot.PlotUtils.hist_range(y_list)
+        print("Plotting ", len(x_list), len(y_list), len(z_list))
+        print("radial_bump        gradient_bump     ", z_text)
+        for i, x in enumerate(x_list):
+            y = y_list[i]
+            print(f"{x:.5g} {y:.5g} ", end="")
+            print(f"{z_list[i]:.5g}")
         hist = axes.hist2d(x_list, y_list, [nx_points, ny_points], 
                            [[min_x, max_x], [min_y, max_y]], False, 
                            z_list, vmin=min_z, vmax=max_z)
@@ -508,21 +515,21 @@ def main():
     do_theta = False
     by="0.1"
     dx="-0.0"
-    plot_dir = "output/2023-03-01_baseline/find_bump_v17/"
-    ref_dir = os.path.join(plot_dir, "bump=-0.0_by=0.0_bumpp=0.0")
-    dir_list = glob.glob(os.path.join(plot_dir, f"bump=*_by={by}_bumpp=*"))
+    run_dir = "output/2023-03-01_baseline/find_bump_v17/"
+    plot_dir = run_dir+f"/plot_compare_bumps_by={by}_alt_2/"
+    utilities.clear_dir(plot_dir)
+    ref_dir = os.path.join(run_dir, "bump=-0.0_by=0.0_bumpp=0.0")
+    dir_list = glob.glob(os.path.join(run_dir, f"bump=*_by={by}_bumpp=*"))
     plot = MultiPlot(plot_dir, dir_list, ref_dir)
-    plot.co_dir = os.path.join(plot_dir, "bump=-0.0_by=0.0_bumpp=0.0")
-    plot.trackOrbit_file = "track_beam/da/fets_ffa-trackOrbit.dat"
+    plot.co_dir = ref_dir
+    plot.trackOrbit_file = "tmp/find_closed_orbits/fets_ffa-trackOrbit_1.dat"
     plot.lattice_file = "track_beam/da/FETS_Ring.tmp"
     plot.da_probe_file = "track_beam/da/ring_probe_001.h5"
-    plot.injection_orbit_dir = os.path.join(plot_dir, "bump=-30.0_by=0.1_bumpp=-0.05")
+    plot.injection_orbit_dir = os.path.join(run_dir, "bump=-30.0_by=0.1_bumpp=-0.05")
     plot.injection_orbit_traj = [[0.1*i, 0.0, -1.0] for i in range(201)] # trajectory of the closed orbit
     plot.injection_orbit_amp = [[0.0001*i, 250.0*i] for i in range(101)] # amplitude [mm] vs time [ns]
     plot.load_orbits()
     plot.parse_orbits()
-    plot_dir = plot_dir+f"/plot_compare_bumps_by={by}_alt/"
-    utilities.clear_dir(plot_dir)
     plot.plot_dir = plot_dir
     x_list = plot.target_r_list
     plot.plot_1d(x_list)
@@ -534,19 +541,19 @@ def main():
     calculator.calculate_bump_settings()
     calculator.plot()
 
-    fig = plot.plot_2d_alt(0.0, 0.05, plot.delta_ax_list[1:], "Orbit A$_x$ [mm]")
+    fig = plot.plot_2d_alt(0.0, 0.05, plot.delta_ax_list, "Orbit A$_x$ [mm]")
     fig.savefig(os.path.join(plot.plot_dir, "r_vs_rp_vs_ax_co.png"))
 
-    fig = plot.plot_2d_alt(0.0, 0.1, plot.min_a4d_list[1:], "Min A$_{4D}$ of lost particles [mm]")
+    fig = plot.plot_2d_alt(0.0, 0.1, plot.min_a4d_list, "Min A$_{4D}$ of lost particles [mm]")
     fig.savefig(os.path.join(plot.plot_dir, "r_vs_rp_vs_a4d.png"))
 
-    fig = plot.plot_2d_alt(0.3, 0.5, plot.tune_0_list[1:], "Horizontal tune")
+    fig = plot.plot_2d_alt(0.3, 0.5, plot.tune_0_list, "Horizontal tune")
     fig.savefig(os.path.join(plot.plot_dir, "r_vs_rp_vs_tune_x.png"))
 
-    fig = plot.plot_2d_alt(0.3, 0.5, plot.tune_1_list[1:], "Vertical tune")
+    fig = plot.plot_2d_alt(0.3, 0.5, plot.tune_1_list, "Vertical tune")
     fig.savefig(os.path.join(plot.plot_dir, "r_vs_rp_vs_tune_y.png"))
 
-    fig = plot.plot_2d_alt(0.99, 1.01, plot.tune_ratio_list[1:], "Tune ratio")
+    fig = plot.plot_2d_alt(0.99, 1.01, plot.tune_ratio_list, "Tune ratio")
     fig.savefig(os.path.join(plot.plot_dir, "r_vs_rp_vs_tune_ratio.png"))
 
 if __name__ == "__main__":

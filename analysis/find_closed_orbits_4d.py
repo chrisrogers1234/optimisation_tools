@@ -456,8 +456,10 @@ class ClosedOrbitFinder4D(object):
         self.minuit.SetFCN(minuit_function)
         try:
             self.minuit.Command("SIMPLEX "+str(n_iterations)+" "+str(target_score))
-        except Exception:
+        except StopIteration:
             sys.excepthook(*sys.exc_info())
+            print(f"Terminated after {self.iteration_number}/{n_iterations} iterations")
+        finally:
             print(f"Terminated after {self.iteration_number}/{n_iterations} iterations")
         return self.get_minuit_hit()
 

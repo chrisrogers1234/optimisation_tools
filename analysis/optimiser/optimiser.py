@@ -1,3 +1,4 @@
+import numbers
 import sys
 import time
 import ctypes
@@ -30,6 +31,12 @@ class Optimiser:
         optimiser.setup(optimiser_config)
         return optimiser
 
+    def post_output(self):
+        return {}
+
+    def receive_output(self, parameter_list):
+        pass
+
 def minuit_function(*args):
     try:
         MinuitOptimiser.minuit_global.minuit_function(*args)
@@ -42,6 +49,8 @@ def minuit_function(*args):
 class MinuitOptimiser(Optimiser):
     def __init__(self):
         super(Optimiser).__init__()
+        self.name = "No name"
+        self.type = "minuit"
         self.algorithm = "Migrad"
         self.target_score = 1e9
         self.max_iterations = 1000
@@ -50,10 +59,16 @@ class MinuitOptimiser(Optimiser):
         self.tracking = None
         self.score = None
         self.minuit = None
+        self.iteration_number = 0
+        self.message_dict = {}
 
     def setup(self, optimiser_config):
         self.minuit = ROOT.TMinuit()
         self.minuit.SetFCN(minuit_function)
+        for key in optimiser_config:
+            if key not in self.__dict__:
+                raise KeyError("did not recognise", key)
+            self.__dict__[key] = optimiser_config[key]
 
     def setup_parameter(self, index):
         parameter = self.parameter_list[index]
@@ -67,6 +82,7 @@ class MinuitOptimiser(Optimiser):
     def prerun_setup(self):
         for i, parameter in enumerate(self.parameter_list):
             self.setup_parameter(i)
+        self.iteration_number = 0
         MinuitOptimiser.minuit_global = self
 
     def update_parameter(self, index):
@@ -82,6 +98,8 @@ class MinuitOptimiser(Optimiser):
         print("run minuit")
         try:
             self.minuit.Command(self.algorithm+" "+str(self.max_iterations)+" "+str(self.target_score))
+        except StopIteration:
+            print("Reached maximum iteration", self.max_iterations, "without convergence\n\n")
         except Exception:
             sys.excepthook(*sys.exc_info())
             print("Minuit failed")
@@ -96,27 +114,6 @@ class MinuitOptimiser(Optimiser):
         fname += self.config.optimisation["output_file"]
         return fname
 
-    def save_state(self, suffix, append):
-        saved_score_list = []
-        for score_list in self.score_dict.values():
-            for score in score_list:
-                saved_score_list.append(score.save_score())
-
-        state = {
-            "target_orbit":self.optimisation["target_orbit"],
-            "parameters":[par.to_dict() for par in self.parameters],
-            "tracking":copy.deepcopy(self.tracking_result),
-            "n_iterations":self.iteration,
-            "target_hit":copy.deepcopy(self.target_hit),
-            "score":self.score,
-            "subs":self.overrides,
-            "optimisation_stage":self.opt_i,
-            "score_list":saved_score_list,
-        }
-        fname = self.get_filename_root()+"."+suffix
-        fout = open(fname, "a")
-        print(json.dumps(state), file=fout)
-
     def update_parameters_from_minuit(self):
         for i, parameter in enumerate(self.parameter_list):
             parameter.update_from_minuit(i)
@@ -126,12 +123,36 @@ class MinuitOptimiser(Optimiser):
         return total_score
 
     def minuit_function(self, nvar=None, parameters=None, score=ctypes.c_float(0.0), jacobian=None, err=None):
+        self.iteration_number += 1
+        if self.iteration_number > self.max_iterations:
+            raise StopIteration("Run out of iterations")
         for i, parameter in enumerate(self.parameter_list):
             self.update_parameter(i)
+        post_dict = self.post_output()
+        self.receive_output(post_dict)
         hit_list_of_lists = self.tracking.track(self.parameter_list, self.score)
         a_score = self.score.get_score(hit_list_of_lists)
         score.value =  a_score
-        print("Total score:", a_score, "\n")
+        print(f"Total score: {a_score:10.4g}  Iteration {self.iteration_number}/{self.max_iterations}\n")
+
+    def receive_output(self, post_dict):
+        """
+        Messaging protocol for messaging between parameters and scores and over
+        different optimisation stages
+        """
+        print("Reconciling parameters against", len(post_dict), "found parameters")
+        self.message_dict.update(post_dict)
+        for parameter in self.parameter_list:
+            parameter.receive_output(post_dict)
+        print(post_dict)
+        self.tracking.receive_output(post_dict)
+        self.score.receive_output(post_dict)
+
+    def post_output(self):
+        for parameter in self.parameter_list:
+            self.message_dict.update(parameter.post_output())
+        self.message_dict.update(self.score.post_output())
+        return self.message_dict
 
     root_algorithms = ["simplex", "migrad"]
     minuit_global = None

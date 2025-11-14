@@ -15,9 +15,10 @@
 #<http://www.gnu.org/licenses/>.
 
 """
-\namespace _opal_tracking
+namespace _opal_tracking
 """
 
+import datetime
 import time
 import tempfile
 import subprocess
@@ -384,13 +385,13 @@ class OpalTracking(TrackingBase):
 
     def open_subprocess(self):
         command = [self.opal_path, self.lattice_filename]+self.flags
-        if self.mpi != None:
+        if self.mpi:
             output = subprocess.check_output(["mpirun", "--version"])
             if "MPI" not in str(output):
                 raise RuntimeError(f"'mpirun --version' fails with {output}")
             command = ["mpirun"]+command
         log = open(self.log_filename, "w")
-
+        print(datetime.datetime.now(), f"Running '{' '.join(command)}', log below\n", file=log)
         proc = subprocess.Popen(command,
                                 stdout=log,
                                 stderr=subprocess.STDOUT)
@@ -595,4 +596,4 @@ class OpalTracking(TrackingBase):
     units = {"x":1000., "y":1000., "z":1000., "t":1e9}
 
     print_keys = ['x', 'y', 'z', 'px', 'py', 'pz', 'kinetic_energy', 't']
-    min_track_number = 11
+    min_track_number = 3

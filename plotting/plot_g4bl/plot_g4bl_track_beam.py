@@ -424,6 +424,7 @@ def do_plot(run_dir, args):
     title = title.split("/")[-1]
     plot_dir = fname(run_dir+"/plot_amplitude_", args, True)
     file_name = "track_beam_amplitude/da_scan//output*.txt"
+    file_name = "tmp/optimisation/output*.txt"
     co_file_name = "closed_orbits_cache"
     cell_length = 2000.0 # full cell length
     if "cell_length" in args:
@@ -438,21 +439,26 @@ def do_plot(run_dir, args):
     plotter.beta_lim = [0.0, 1000.0]
     plotter.n_a4d_bins = 20
     input_station = 1
-    output_station = 100
+    output_station = 50
     plotter.do_plots(input_station, output_station)
     print(f"Plots went in {plot_dir}")
 
 def main():
-    run_dir = "output/demo_apr25_v028/"
+    """
+    Plot DA calculation following track beam call
+    """
+    run_dir = "output/demo_apr25_v031/"
     for by in ["0.1"]:
         for dp_pos in ["0.025", "0.05", "0.1", "0.15", "0.2", "0.225"]:
             for dp_length in ["200"]:
                 try:
                     args = [
                         ("pz", "*"),
-                        ("by", by),
-                        ("dp_pos", dp_pos),
-                        ("dp_length", dp_length),
+                        ("by", "0.2"),
+                        ("dt", "20"),
+                        ("dtheta", "10"),
+                        ("phi_s", "20"),
+                        ("efield", "30"),
                     ]
                     do_plot(run_dir, args)
                 except Exception:
