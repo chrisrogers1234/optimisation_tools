@@ -44,7 +44,7 @@ class OptimiseMany:
 
 
         result = scipy.optimize.differential_evolution(
-            self.run_function,
+            self.run_function, # function, run in a child process
             bounds,
             maxiter=maxiter, # maximum tolerance
             atol=atol, # absolute tolerance
@@ -52,9 +52,16 @@ class OptimiseMany:
             workers=workers, # number of concurrent jobs
             x0=seed, # seed values
             polish=will_polish, # do some post optimisation?
-            updating="deferred" # keep running job even if previous job not finished
+            updating="deferred", # keep running job even if previous job not finished
+            callback=self.callback
         )
         print("Minimisation returns", result)
+
+    def callback(self, intermediate_result, convergence=None):
+        print("Callback", intermediate_result, self.unique_run_id, convergence)
+        self.unique_run_id += 1
+        if self.unique_run_id > self.config.get_optimisation_control()["maximum_iteration"]:
+            raise RuntimeError("Out of iterations")
 
     def run_function(self, x_value):
         x_index = 0
@@ -66,24 +73,39 @@ class OptimiseMany:
                 func_call.append(x_value[x_index])
                 x_index += 1
         func_call = [str(value) for value in func_call]
-        with open(self.config.get_log_filename(func_call), "w") as log_file:
-            proc = subprocess.Popen(func_call, stdout=log_file, stderr=subprocess.STDOUT)
-            proc.wait()
-        print("Function call", func_call, "pid", proc.pid, "finished with return code", proc.returncode)
-        score = self.config.get_score(func_call)
-        print("Got score", score)
+        print("Function call", self.unique_run_id, func_call)
+        try:
+            logname = self.config.get_log_filename(func_call)
+            with open(logname, "w") as log_file:
+                proc = subprocess.Popen(func_call, stdout=log_file, stderr=subprocess.STDOUT)
+                proc.wait()
+            score = self.config.get_score(func_call)
+            print("   ", self.unique_run_id, func_call, "pid", proc.pid, "finished with return code", proc.returncode, "got score", score)
+        except:
+            print("   ", self.unique_run_id, func_call, "failed!")
+            score = 1.1
+            if True:
+                raise
         sys.stdout.flush()
-        time.sleep(1)
+        time.sleep(0.01)
         return score
 
 class ConfigBase:
     """
     ConfigBase base class that tells OptimiseMany how to control jobs
 
-    ConfigBase is a pure abstract base class. It continas
+    ConfigBase is a pure abstract base class.
     """
     def __init__(self):
         pass
+
+    def get_parameters(self):
+        """
+        Return list of parameters. Each parameter is a dictionary with seed, fixed, min, max entries.
+
+        Order is the order they will be called on the command line
+        """
+        raise NotImplementedError("Need to overload this method")
 
     def get_optimisation_control(self):
         """
@@ -102,6 +124,15 @@ class ConfigBase:
         return a filename where logging will be done
         """
         raise NotImplementedError("Need to overload this method")
+
+    def get_script(self):
+        """
+        return a list of args to command line. Will be called like
+
+        popen(script+[par1, par2, par3, ...])
+        """
+        raise NotImplementedError("Need to overload this method")
+
 
 def main():
     optimiser = OptimiseMany()

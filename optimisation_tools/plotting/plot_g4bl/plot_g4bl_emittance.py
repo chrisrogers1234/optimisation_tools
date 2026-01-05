@@ -321,6 +321,7 @@ class PlotG4BLEmittance(object):
         print("  Transmission", "".join([f"{trans:8.4g}" for trans in self.out_json["percent_transmission"][::10]]))
         print("  Trans emit  ", "".join([f"{emit:8.4g}" for emit in self.out_json["emittance_perp"] [::10]]))
         print("  Long emit   ", "".join([f"{emit:8.4g}" for emit in self.out_json["emittance_long"] [::10]]))
+        print("  6D emit     ", "".join([f"{emit:8.4g}" for emit in self.out_json["emittance_6d"] [::10]]))
 
         z_list = self.get_z_list()
         figure = matplotlib.pyplot.figure(figsize=(20,10))
@@ -762,20 +763,20 @@ def main():
     by = "*"
     variables = [
         ("pz", "200"),
-        ("by", by),
-        #("dt", "20"),
-        #("dtheta", "10"),
-        #("phi_s", "0"),
-        #("efield", efield),
+        ("by", "0.2"),
+        ("dt", "20"),
+        ("dtheta", "10"),
+        ("phi_s", "20"),
+        ("efield", efield),
     ]
     amp_trans_max = 150
     amp_long_max = 300
-    run_dir = "output/demo_apr25_v013/"
-    job = "beam"
+    run_dir = "output/demo_apr25_v027/"
+    job = "*"
     run_dir_glob = make_run_dir_glob(run_dir, variables)
-    plot_dir = f"emittance_plots_{job}/"
+    plot_dir = f"emittance_plots_ref/"
     #file_name = f"track_beam_amplitude/{tracking}/output.txt"
-    file_name = f"tmp/optimisation/{job}/output.txt"
+    file_name = f"track_beam_amplitude/beam/output.txt"
     file_format = "icool_for009"
     frequency = 0.704
     print(f"Running with glob '{run_dir_glob}'")
@@ -789,25 +790,25 @@ def main():
     plotter.amp_long_max = amp_long_max
     plotter.e_min = 0.0
     plotter.e_max = 500.0
-    plotter.z_range = [0*1e3, 2000*1e3] # [None, None]#
+    plotter.z_range = [50*1e3, 150*1e3] # [None, None]#
     plotter.emit_range = [0.0, 5.0]
-    plotter.emit6d_range = [0.0, 0.1]
+    plotter.emit6d_range = [0.0, 12.0]
     plotter.max_station = 200 # max station for phase space plots
     plotter.station_stroke = 1 # stroke station for phase space plots
     plotter.frequency = frequency
     plotter.glob_data()
-    #plotter.do_plots()
+    plotter.do_plots()
     index = [var[0] for var in variables].index("by")
     scan = Scan()
     scan_glob = run_dir_glob+plot_dir+"/"+plotter.output_filename
-    scan_plot_dir = run_dir+f"/scan_plots_efield={efield}"
+    scan_plot_dir = run_dir+f"/scan_plots_efield={efield}_ref"
     for key in plotter.short_keys_of_interest:
-            scan_plot_dir += f"_{key}"
+        scan_plot_dir += f"_{key}"
     scan.start_cell = 0
     scan.mid_cell = 25
     scan.target_cell = 50
     scan.final_cell = 100
-    scan.plot_scan_group(scan_glob, ["__dipole_field__"], scan_plot_dir, f"RF Field = {efield} MV/m; B$_y$ = {by} T")
+    #scan.plot_scan_group(scan_glob, ["__rf_phase__"], scan_plot_dir, f"RF Field = {efield} MV/m; B$_y$ = {by} T")
 
 if __name__ == "__main__":
     main()

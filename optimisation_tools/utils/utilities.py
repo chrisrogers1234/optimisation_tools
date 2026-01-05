@@ -9,18 +9,21 @@ import importlib
 import json
 
 import numpy
-import ROOT
+#try:
+#    import ROOT
+#except ImportError:
+#    print("ROOT could not be imported")
 
-import xboa.common
-import xboa.hit
+#import xboa.common
+#import xboa.hit
 
 
-from optimisation_tools.opal_tracking import OpalTracking
-from optimisation_tools.opal_tracking import G4BLTracking
-from optimisation_tools.opal_tracking import BDSIMTracking
-from optimisation_tools.opal_tracking import StoreDataInMemory
-from optimisation_tools.opal_tracking import PyOpalTracking
-from optimisation_tools.opal_tracking import PyOpalTracking2
+#from optimisation_tools.opal_tracking import OpalTracking
+#from optimisation_tools.opal_tracking import G4BLTracking
+#from optimisation_tools.opal_tracking import BDSIMTracking
+#from optimisation_tools.opal_tracking import StoreDataInMemory
+#from optimisation_tools.opal_tracking import PyOpalTracking
+#from optimisation_tools.opal_tracking import PyOpalTracking2
 
 import matplotlib
 import matplotlib.pyplot
@@ -427,7 +430,19 @@ def directory_name(lattice, study, version):
     dir_name += "/"
     return dir_name
 
-def get_config(path_code="scripts/"):
+def directory_name_2(version, name, subs):
+    dir_name = f"output/v{version}/name={name};_"
+    for key, value in subs.items():
+        key = key.replace("__", "")
+        if type(value) == type(1.0):
+            dir_name += f"{key}={value:8.4g};_"
+        else:
+            dir_name += f"{key}={value};_"
+    dir_name = dir_name[:-2]+"/"
+    dir_name = dir_name.replace(" ", "")
+    return dir_name
+
+def get_config(not_used="not used"):
     if len(sys.argv) < 2:
         print("Usage: python /path/to/run_one.py /path/to/config.py")
         sys.exit(1)

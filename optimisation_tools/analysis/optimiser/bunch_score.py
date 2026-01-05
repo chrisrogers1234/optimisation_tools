@@ -68,8 +68,6 @@ class TM2DBeam:
             else:
                 a_psv_list = self.build_psv_tm(tm)
             psv_all = numpy.concatenate((psv_all, a_psv_list), 1)
-        print("bunch_score generated psv with shape", psv_all.shape)
-        print("    using variables", variables)
         psv_list = [dict([
                     (variables[col], psv_all[row][col]) for col in range(psv_all.shape[1])
                 ]) for row in range(psv_all.shape[0])]

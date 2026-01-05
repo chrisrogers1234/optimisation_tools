@@ -8,7 +8,6 @@ import json
 import importlib
 
 import numpy
-import ROOT
 
 import xboa.common
 
@@ -65,7 +64,6 @@ def main():
     config_file_name, config = utilities.get_config()
     output_dir(config, config_file_name)
     utilities.setup_gstyle()
-    ROOT.gErrorIgnoreLevel = config.run_control["root_verbose"]
     if config.run_control["random_seed"] != None:
         numpy.random.seed(config.run_control["random_seed"])
     for name, module in MODULES:
