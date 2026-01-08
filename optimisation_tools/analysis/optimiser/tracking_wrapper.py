@@ -35,7 +35,6 @@ class TrackingWrapper:
                 continue
             baseline_value = self.config.substitution_list[0][key]
             if value in post_dict.keys():
-                print(f"Replacing '{key}' '{self.received_subs[key]}' with '{post_dict[value]}'")
                 self.received_subs[key] = post_dict[value]
             elif isinstance(baseline_value, numbers.Number):
                 # the current value is not a number, but the baseline is a number

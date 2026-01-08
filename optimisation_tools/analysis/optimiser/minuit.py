@@ -1,41 +1,11 @@
-import numbers
-import sys
-import time
 import ctypes
-import copy
 
-import ROOT
+try:
+    import ROOT
+except:
+    print("Optimiser needs ROOT")
 
-from optimisation_tools.opal_tracking import OpalTracking
-
-class Optimiser:
-    def __init__(self):
-        pass
-
-    def setup(self, optimisation_config):
-        pass
-
-    def run_optimisation(self):
-        pass
-
-    def teardown(self):
-        pass
-
-    @classmethod
-    def setup_optimisations(cls, optimiser_config):
-        optimiser_types = {
-            "minuit":MinuitOptimiser,
-        }
-        a_type = optimiser_config["type"]
-        optimiser = optimiser_types[a_type]()
-        optimiser.setup(optimiser_config)
-        return optimiser
-
-    def post_output(self):
-        return {}
-
-    def receive_output(self, parameter_list):
-        pass
+import optimisation_tools.analysis.optimiser.optimiser_base as optimiser_base
 
 def minuit_function(*args):
     try:
@@ -46,21 +16,15 @@ def minuit_function(*args):
         raise
 
 
-class MinuitOptimiser(Optimiser):
+class Minuit(optimiser_base.OptimiserBase):
     def __init__(self):
         super(Optimiser).__init__()
-        self.name = "No name"
-        self.type = "minuit"
         self.algorithm = "Migrad"
         self.target_score = 1e9
         self.max_iterations = 1000
         self.iteration = 0
-        self.parameter_list = []
-        self.tracking = None
-        self.score = None
         self.minuit = None
         self.iteration_number = 0
-        self.message_dict = {}
 
     def setup(self, optimiser_config):
         self.minuit = ROOT.TMinuit()
@@ -109,10 +73,6 @@ class MinuitOptimiser(Optimiser):
     def teardown(self):
         pass
 
-    def get_filename_root(self):
-        fname = self.config.run_control["output_dir"]+"/"
-        fname += self.config.optimisation["output_file"]
-        return fname
 
     def update_parameters_from_minuit(self):
         for i, parameter in enumerate(self.parameter_list):
@@ -134,25 +94,6 @@ class MinuitOptimiser(Optimiser):
         a_score = self.score.get_score(hit_list_of_lists)
         score.value =  a_score
         print(f"Total score: {a_score:10.4g}  Iteration {self.iteration_number}/{self.max_iterations}\n")
-
-    def receive_output(self, post_dict):
-        """
-        Messaging protocol for messaging between parameters and scores and over
-        different optimisation stages
-        """
-        print("Reconciling parameters against", len(post_dict), "found parameters")
-        self.message_dict.update(post_dict)
-        for parameter in self.parameter_list:
-            parameter.receive_output(post_dict)
-        print(post_dict)
-        self.tracking.receive_output(post_dict)
-        self.score.receive_output(post_dict)
-
-    def post_output(self):
-        for parameter in self.parameter_list:
-            self.message_dict.update(parameter.post_output())
-        self.message_dict.update(self.score.post_output())
-        return self.message_dict
 
     root_algorithms = ["simplex", "migrad"]
     minuit_global = None

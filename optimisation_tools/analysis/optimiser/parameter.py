@@ -5,8 +5,8 @@ class Parameter:
         self.name = ""
         self.key = ""
         self.seed = None
-        self.lower_limit = 0
-        self.upper_limit = 0
+        self.lower_limit = None
+        self.upper_limit = None
         self.error = 1e-3
         self.fixed = False
         self.minuit_index = -1

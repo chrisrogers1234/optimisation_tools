@@ -6,7 +6,10 @@ import os
 import sys
 #import warnings
 #warnings.filterwarnings("ignore")
-from optimisation_tools.analysis.optimiser import optimiser
+from optimisation_tools.analysis.optimiser import optimiser_base
+from optimisation_tools.analysis.optimiser import differential_evolution
+from optimisation_tools.analysis.optimiser import minuit
+from optimisation_tools.analysis.optimiser import minimization
 from optimisation_tools.analysis.optimiser import parameter
 from optimisation_tools.analysis.optimiser import score
 from optimisation_tools.analysis.optimiser import bunch_score
@@ -34,13 +37,26 @@ class Optimisation:
             parameter_list = []
             for parameter_config in optimisation_stage["parameters"]:
                 parameter_list.append(parameter.Parameter.setup(parameter_config))
-            an_optimiser = optimiser.Optimiser.setup_optimisations(optimisation_stage["optimiser"])
+            an_optimiser = self.optimiser_factory(optimisation_stage["optimiser"])
             an_optimiser.setup(optimisation_stage["optimiser"])
             an_optimiser.parameter_list = parameter_list
             an_optimiser.score = score.Score.setup_scores(optimisation_stage["score"])
             an_optimiser.tracking = tracking_wrapper.TrackingWrapper()
             an_optimiser.tracking.setup(config, optimisation_stage["tracking"])
             self.optimisation_stages.append(an_optimiser)
+
+
+    def optimiser_factory(cls, optimiser_config):
+        optimiser_types = {
+            "minuit":minuit.Minuit,
+            "differential_evolution":differential_evolution.DifferentialEvolution,
+            "scipy_minimisation":minimization.Minimization,
+        }
+        a_type = optimiser_config["type"]
+        optimiser = optimiser_types[a_type]()
+        optimiser.setup(optimiser_config)
+        return optimiser
+
 
     def optimise(self):
         post_dict = {}
@@ -60,7 +76,6 @@ class Optimisation:
                 post_dict.update(an_optimiser.post_output())
             except Exception:
                 sys.excepthook(*sys.exc_info())
-
 
     def store_data(self):
         outname = self.get_filename_root()+"_"+f'{self.store_index:03}'+".out"
