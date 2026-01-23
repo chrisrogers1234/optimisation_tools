@@ -67,5 +67,8 @@ class Minimization(optimiser_base.OptimiserBase):
         self.receive_output(post_dict)
         hit_list_of_lists = self.tracking.track(self.parameter_list, self.score)
         a_score = self.score.get_score(hit_list_of_lists)
-        print(f"Iteration: {self.iteration:04d} Total score: {a_score:10.4g}")
+        print(f"Iteration: {self.iteration:04d} Total score: {a_score:10.4g}\n")
+        if self.iteration >= self.max_iterations:
+            raise StopIteration("No more iterations")
+        self.score_result = a_score
         return a_score

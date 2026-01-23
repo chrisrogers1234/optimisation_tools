@@ -10,7 +10,10 @@ import sys
 import math
 import os
 import shutil
-import ROOT
+try:
+    import ROOT
+except ModuleNotFoundError:
+    print("find_tune won't work - ROOT not found")
 import xboa.common
 from xboa.hit import Hit
 from xboa.algorithms.tune import FFTTuneFinder

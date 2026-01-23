@@ -30,7 +30,6 @@ class TM2DBeam:
 
     def build_psv_tm(self, tm):
         transfer_matrix = tm["transfer_matrix"]
-        print("bunch_score.TM2DBeam TRANSFER MATRIX", tm)
         emittance = tm["emittance"]
         geometric = tm["geometric"]
         mass = xboa.common.pdg_pid_to_mass[abs(self.pid)]
@@ -202,7 +201,6 @@ class BunchScore(score.Score):
         return score
 
     def receive_output(self, output_dict):
-        print("BunchScore Receiving output", output_dict)
         self.beam_gen.receive_output(output_dict)
 
     def get_input_psv_list(self):

@@ -13,8 +13,10 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import numpy
-import ROOT
-import platypus
+try:
+    import ROOT
+except ModuleNotFoundError:
+    pass
 
 import xboa.common
 from xboa.hit import Hit

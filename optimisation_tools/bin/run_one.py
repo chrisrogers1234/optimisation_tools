@@ -63,7 +63,8 @@ def master_substitutions(config):
 def main():
     config_file_name, config = utilities.get_config()
     output_dir(config, config_file_name)
-    utilities.setup_gstyle()
+    if "ROOT" in sys.modules:
+        utilities.setup_gstyle()
     if config.run_control["random_seed"] != None:
         numpy.random.seed(config.run_control["random_seed"])
     for name, module in MODULES:

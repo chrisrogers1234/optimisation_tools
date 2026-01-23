@@ -29,7 +29,10 @@ import sys
 import shutil
 
 
-import ROOT
+try:
+    import ROOT
+except ModuleNotFoundError:
+    print("bdsim_tracking won't work - ROOT not found")
 from xboa import common
 import xboa.hit
 from xboa.hit import Hit

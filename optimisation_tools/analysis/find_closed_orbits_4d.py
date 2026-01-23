@@ -7,7 +7,10 @@ import shutil
 import time
 import ctypes
 
-import ROOT
+try:
+    import ROOT
+except ModuleNotFoundError:
+    print("find_closed_orbits_4d won't work - ROOT not found")
 import numpy
 numpy.seterr('warn')
 numpy.set_printoptions(linewidth=200)

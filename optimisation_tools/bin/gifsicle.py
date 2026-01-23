@@ -101,9 +101,9 @@ def main():
     gifseriser.delay = 10
     dir_glob = "/home/cr67/work/2020-07-06_mc/final_cooling/beam_optics_evolution/output/rf_capture_v48/capture__buncher_length=29;_rotator_length=113;_n_bunches=25;_rotator_voltage=17.52;_bz_ramp_length=50;_bz_out=3.509/movie/"
     dir_glob = "/home/cr67/work/2025-01-01_low-energy-cooling/rogers-low-energy-cooling/output/induction_v5?/name=run*/"
-    dir_glob = "/home/cr67/work/2025-01-01_low-energy-cooling/g4bl-low-energy-cooling/output/v18/name=running_pulsed;_pf1=0.713;_pf2=-0.1293;_dt1=227.5;_zoff2=770.6;_rf1_pulse_beta_rel=0.004905;_flat1=794.5;_density_factor=0.09851/time/"
+    dir_glob = "/home/cr67/work/2025-01-01_low-energy-cooling/g4bl-low-energy-cooling/output/v31/best/"
     for a_dir in glob.glob(dir_glob):
-        for prefix in ["z"]: #[f"bucket_t_vs_e", f"dt_vs_e"]: #"plane_{prefix}"
+        for prefix in ["t_vs_kinetic_energy", "z_vs_kinetic_energy", "z_vs_pz"][-1:]: #[f"bucket_t_vs_e", f"dt_vs_e"]: #"plane_{prefix}"
             run_dir = a_dir
             glob_file = f"{run_dir}/{prefix}_*.png"
             generate_webp(glob_file, f"{run_dir}/animation_{prefix}.webp", 100)

@@ -3,7 +3,7 @@ import ctypes
 try:
     import ROOT
 except:
-    print("Optimiser needs ROOT")
+    print("Minuit Optimiser won't work - ROOT not found")
 
 import optimisation_tools.analysis.optimiser.optimiser_base as optimiser_base
 
@@ -14,7 +14,6 @@ def minuit_function(*args):
         print("Score function failed")
         sys.excepthook(*sys.exc_info())
         raise
-
 
 class Minuit(optimiser_base.OptimiserBase):
     def __init__(self):
@@ -73,7 +72,6 @@ class Minuit(optimiser_base.OptimiserBase):
     def teardown(self):
         pass
 
-
     def update_parameters_from_minuit(self):
         for i, parameter in enumerate(self.parameter_list):
             parameter.update_from_minuit(i)
@@ -93,6 +91,7 @@ class Minuit(optimiser_base.OptimiserBase):
         hit_list_of_lists = self.tracking.track(self.parameter_list, self.score)
         a_score = self.score.get_score(hit_list_of_lists)
         score.value =  a_score
+        self.score_result = a_score
         print(f"Total score: {a_score:10.4g}  Iteration {self.iteration_number}/{self.max_iterations}\n")
 
     root_algorithms = ["simplex", "migrad"]

@@ -29,7 +29,7 @@ class PlotG4BLEmittance(object):
         self.px_range = [-100.0, 100.0]
         self.x_range = [-100.0, 100.0]
         self.pz_range = [1.0, 600.0]
-        self.e_range = [175.0, 275.0]
+        self.e_range = [150.0, 250.0]
         self.emit_range = [0.0, 5.0]
         self.emit6d_range = [0.0, 0.1]
         self.ct_range = [-20*300.0, 100*300.0]
@@ -361,7 +361,14 @@ class PlotG4BLEmittance(object):
         figure.savefig(self.plot_dir+"/transmission_vs_z.png")
         matplotlib.pyplot.close(figure)
 
+    def move(self, a_dir, filename_glob):
+        os.makedirs(a_dir)
+        for filename in glob.glob(filename_glob):
+            os.rename(filename, f"{a_dir}/{filename}")
+
     def plot_transverse(self, data):
+        variables = ["x", "px", "y", "py", "t", "p", "weight"] # BUG Axis labesl
+        units = ["mm", "mm", "MeV/c", "MeV/c", "ns", "MeV", ""]
         self.rebunch(data)
         transmission = self.cuts(data)
         self.plots_beamline(data, transmission)
@@ -373,19 +380,28 @@ class PlotG4BLEmittance(object):
         for frame_index, bunch in enumerate(bunch_list):
             psize = 3
             print("\r    Making movie frame", frame_index+1, "/", len(bunch_list), end="")
-            my_vars = bunch.list_get_hit_variable(["x", "px", "y", "py", "t", "energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "ns", "MeV", ""])
+            my_vars = bunch.list_get_hit_variable(variables, units)
 
             bunch_passed_cut = bunch.deepcopy()
             bunch_passed_cut.conditional_remove({"weight":0.00001}, operator.lt)
-            my_vars_passed_cut = bunch_passed_cut.list_get_hit_variable(["x", "px", "y", "py", "t", "energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "ns", "MeV", ""])
+            my_vars_passed_cut = bunch_passed_cut.list_get_hit_variable(variables, units)
 
             bunch_failed_cut = bunch.deepcopy()
             bunch_failed_cut.conditional_remove({"weight":0.00001}, operator.gt)
-            my_vars_failed_cut = bunch_failed_cut.list_get_hit_variable(["x", "px", "y", "py", "t", "energy", "weight"], ["mm", "mm", "MeV/c", "MeV/c", "ns", "MeV", ""])
+            my_vars_failed_cut = bunch_failed_cut.list_get_hit_variable(variables, units)
 
             my_vars[4] = [ct-my_vars[4][0] for ct in my_vars[4]]
             my_vars_passed_cut[4] = [ct-my_vars_passed_cut[4][0] for ct in my_vars_passed_cut[4]]
-            my_vars_failed_cut[4] = [ct-my_vars_failed_cut[4][0] for ct in my_vars_failed_cut[4]]
+            my_vars_failed_cut[4] = [ct-my_vars_passed_cut[4][0] for ct in my_vars_failed_cut[4]]
+            if frame_index == 0:
+                print("\nPassed:")
+                for hit in bunch_passed_cut:
+                    print(f'    {hit["event_number"]:04d} {hit["t"]}')
+                print("Failed:")
+                for hit in bunch_failed_cut:
+                    print(f'    {hit["event_number"]:04d} {hit["t"]}')
+#1  0 2 0 1 -7.10227e-10 -0.00661743 -0.000501625 0 8.51876e-08 -6.27399e-07 0.2 0.205213 0.215556 6.25546e-06 1.0000 0 0 0 0   0 0 0
+#30 0 2 0 1 -2.98295e-10 -0.00661815 -0.000501525 0 -5.27045e-07 2.63521e-08 0.2 0.205235 0.215553 6.25546e-06 1.0000 0 0 0 0   0 0 0
 
 
             figure = matplotlib.pyplot.figure(figsize=(20,10))
@@ -408,7 +424,7 @@ class PlotG4BLEmittance(object):
             axes.text(0.01, 0.6, test_str, transform=axes.transAxes)
 
             axes = figure.add_subplot(2, 2, 2)
-            #axes.scatter(my_vars_failed_cut[4], my_vars_failed_cut[5], c="orange", s=psize)
+            axes.scatter(my_vars_failed_cut[4], my_vars_failed_cut[5], c="orange", s=psize)
             axes.scatter(my_vars_passed_cut[4], my_vars_passed_cut[5], s=psize)
             axes.set_xlabel("t - t$_{ref}$ [ns]")
             axes.set_ylabel("Total energy [MeV]")
@@ -421,7 +437,7 @@ class PlotG4BLEmittance(object):
             axes.text(0.01, 0.8, test_str, transform=axes.transAxes)
 
             axes = figure.add_subplot(2, 2, 3)
-            axes.scatter(my_vars[0], my_vars[5], c="orange", s=psize)
+            axes.scatter(my_vars_failed_cut[0], my_vars_failed_cut[5], c="orange", s=psize)
             axes.scatter(my_vars_passed_cut[0], my_vars_passed_cut[5], s=psize)
             axes.set_xlabel("x [mm]")
             axes.set_ylabel("Total energy [MeV]")
@@ -429,7 +445,7 @@ class PlotG4BLEmittance(object):
             axes.set_ylim(self.e_range)
 
             axes = figure.add_subplot(2, 2, 4)
-            axes.scatter(my_vars[2], my_vars[5], c="orange", s=psize)
+            axes.scatter(my_vars_failed_cut[2], my_vars_failed_cut[5], c="orange", s=psize)
             axes.scatter(my_vars_passed_cut[2], my_vars_passed_cut[5], s=psize)
             axes.set_xlabel("y [mm]")
             axes.set_ylabel("Total energy [MeV]")
@@ -467,6 +483,7 @@ class PlotG4BLEmittance(object):
                                     "-lavcopts", "vcodec=msmpeg4:vbitrate=2000:mbd=2:trell",
                                     "-oac", "copy",
                                     "-o", "animation_ps.avi"], stderr=subprocess.STDOUT)
+            self.move("ps", "ps_*.png")
             output = subprocess.check_output(["mencoder",
                                     "mf://bucket_*.png",
                                     "-mf", "w=800:h=600:fps=5:type=png",
@@ -474,6 +491,7 @@ class PlotG4BLEmittance(object):
                                     "-lavcopts", "vcodec=msmpeg4:vbitrate=2000:mbd=2:trell",
                                     "-oac", "copy",
                                     "-o", "animation_bucket.avi"], stderr=subprocess.STDOUT)
+            self.move("bucket", "bucket_*.png")
         except Exception:
             sys.excepthook(*sys.exc_info())
             print("Movie failed with:")
@@ -762,21 +780,22 @@ def main():
     efield = "30"
     by = "*"
     variables = [
-        ("pz", "200"),
-        ("by", "0.2"),
+        ("pz", "210"),
+        ("by", "0.1"),
         ("dt", "20"),
         ("dtheta", "10"),
-        ("phi_s", "20"),
+        ("phi_s", "0"),
         ("efield", efield),
     ]
     amp_trans_max = 150
     amp_long_max = 300
-    run_dir = "output/demo_apr25_v027/"
+    run_dir = "output/demo_apr25_v040/"
     job = "*"
     run_dir_glob = make_run_dir_glob(run_dir, variables)
-    plot_dir = f"emittance_plots_ref/"
+    optimisation_dir = "cooling" # "time_scan" # "equilibrium_emittance" # "reference_trajectory" # "rf_phase" # "equilibrium_emittance" #
+    plot_dir = f"{optimisation_dir}_plots/"
     #file_name = f"track_beam_amplitude/{tracking}/output.txt"
-    file_name = f"track_beam_amplitude/beam/output.txt"
+    file_name = f"tmp/optimisation/{optimisation_dir}/output.txt"
     file_format = "icool_for009"
     frequency = 0.704
     print(f"Running with glob '{run_dir_glob}'")
@@ -790,7 +809,7 @@ def main():
     plotter.amp_long_max = amp_long_max
     plotter.e_min = 0.0
     plotter.e_max = 500.0
-    plotter.z_range = [50*1e3, 150*1e3] # [None, None]#
+    plotter.z_range = [None, None]#[50*1e3, 150*1e3] #
     plotter.emit_range = [0.0, 5.0]
     plotter.emit6d_range = [0.0, 12.0]
     plotter.max_station = 200 # max station for phase space plots

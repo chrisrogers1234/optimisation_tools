@@ -8,20 +8,8 @@ import optimisation_tools.analysis.optimiser.optimiser_base as optimiser_base
 class DifferentialEvolution(optimiser_base.OptimiserBase):
     def __init__(self):
         super().__init__()
-
-        self.algorithm = "Migrad"
         self.target_score = 1e9
-        self.max_iterations = 1000
-        self.iteration = 0
-        self.iteration_number = 0
         self.number_of_processes = 1
-
-
-        #self.message_dict = {}
-        #self.config = None
-        #self.parameter_list = []
-        #self.tracking = None
-        #self.score = None
 
     def setup(self, optimiser_config):
         for key in optimiser_config:
@@ -63,4 +51,5 @@ class DifferentialEvolution(optimiser_base.OptimiserBase):
         hit_list_of_lists = self.tracking.track(self.parameter_list, self.score)
         a_score = self.score.get_score(hit_list_of_lists)
         print(f"Total score: {a_score:10.4g}")
+        self.score_result = a_score
         return a_score

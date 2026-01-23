@@ -14,14 +14,14 @@ import numpy
 #except ImportError:
 #    print("ROOT could not be imported")
 
-#import xboa.common
-#import xboa.hit
+import xboa.common
+import xboa.hit
 
 
-#from optimisation_tools.opal_tracking import OpalTracking
-#from optimisation_tools.opal_tracking import G4BLTracking
+from optimisation_tools.opal_tracking import OpalTracking
+from optimisation_tools.opal_tracking import G4BLTracking
 #from optimisation_tools.opal_tracking import BDSIMTracking
-#from optimisation_tools.opal_tracking import StoreDataInMemory
+from optimisation_tools.opal_tracking import StoreDataInMemory
 #from optimisation_tools.opal_tracking import PyOpalTracking
 #from optimisation_tools.opal_tracking import PyOpalTracking2
 
@@ -132,8 +132,49 @@ def do_lattice(config, subs, overrides, hit_list = None, tracking = None):
             xboa.common.substitute(lin, lout, subs)
     out_dir = os.path.dirname(lattice_out[0])
     with open(os.path.join(out_dir, "subs.json"), "w") as out_file:
+        subs = sanitize(subs)
         out_file.write(json.dumps(subs, indent=2))
     return subs
+
+def sanitize(pyitem):
+    # convert to json serialisable object
+    if isinstance(pyitem, dict):
+        for key, value in pyitem.items():
+            pyitem[key] = sanitize(pyitem[key])
+    elif isinstance(pyitem, list):
+        for i, value in enumerate(pyitem):
+            pyitem[i] = sanitize(pyitem[i])
+    elif isinstance(pyitem, numpy.ndarray):
+        pyitem = pyitem.tolist()
+        pyitem = sanitize(pyitem)
+    return pyitem
+
+def update(old, new):
+    """
+    Recursively update json structure.
+
+    If old[key] and new[key] exists:
+    * If old[key] and new[key] are a dictionary or a list, update old[key] with
+      new[key].
+    * If old[key] and new[key] are of different type or not a dictionary or
+      list, replace old[key] with new[key].
+
+    If only old[key] or new[key] exists, the data is appended to the output.
+    """
+    new = copy.deepcopy(new)
+    if isinstance(old, dict) and isinstance(new, dict):
+        for key in old:
+            if key in new:
+                new[key] = update(old[key], new[key])
+            else:
+                new[key] = old[key]
+    elif isinstance(old, list) and isinstance(new, list):
+        common_length = min(len(old), len(new))
+        for i in range(common_length):
+            new[i] = update(old[i], new[i])
+        new += old[len(new):]
+    # else we just replace old with new
+    return new
 
 def reference(config, energy, x=0., px=0., y=0., py=0.):
     """
@@ -432,7 +473,7 @@ def directory_name(lattice, study, version):
 
 def directory_name_2(version, name, subs):
     dir_name = f"output/v{version}/name={name};_"
-    for key, value in subs.items():
+    for key, value in sorted(subs.items()):
         key = key.replace("__", "")
         if type(value) == type(1.0):
             dir_name += f"{key}={value:8.4g};_"

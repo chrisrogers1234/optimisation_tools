@@ -19,8 +19,8 @@ class Score(object):
     def get_input_psv_list(self):
         raise NotImplementedError("Should be overridden")
 
-    def save_score(self):
-        raise NotImplementedError("Should be overridden")
+    def store_data(self):
+        return {}
 
     def post_output(self): # optionally, we post output from the score function
         return {}
@@ -28,7 +28,6 @@ class Score(object):
     def setup(self, config):
         for key in config:
             if key not in self.__dict__:
-                print(self.__dict__.keys())
                 raise KeyError(f"Did not recognise {key} while setting up score")
             self.__dict__[key] = config[key]
 
@@ -139,6 +138,10 @@ class SumSquareScore(Score):
             post_dict.update(score.post_output())
         return post_dict
 
+    def store_data(self):
+        score_data = {"sum_square_score_list":[score.store_data() for score in self.score_list]}
+        return score_data
+
 class PSVScore(Score):
     def __init__(self):
         super(Score).__init__()
@@ -153,13 +156,12 @@ class PSVScore(Score):
         # dependent; e stands for "ephemeral"
         self.e_input_psv = {}
         self.e_ref_psv = {}
+        self.score = -1e9
         self.verbose = False
 
     def print_hit(self, hit):
         for var in self.print_variables:
-            print(f"{var} {hit[var]:8.4g}", end=" ")
-        if self.print_variables:
-            print(flush = True)
+            print(f"{var} {hit[var]:10.4g}", end=" ")
 
     def receive_output(self, parameter_list):
         self.e_input_psv = Score.reconcile_dict(parameter_list, self.input_psv)
@@ -185,13 +187,13 @@ class PSVScore(Score):
             post_dict[self.post_key] = self.e_ref_psv
         return post_dict
 
-    def save_score(self):
+    def store_data(self):
         output = {
-            "score_type":"orbit",
+            "score_type":"PSVScore",
             "station":self.station,
-            "target":self.target_co,
-            "orbit":self.print_r,
-            "weighted_orbit":self.score
+            "target":self.e_ref_psv, # e_ means it has variable substitutions done
+            "orbit":self.e_input_psv,
+            "score":self.score
         }
         return output
 
@@ -278,13 +280,11 @@ class TMScore(Score):
 
     def save_score(self):
         output = {
-            "score_type":"tune",
-            "station":self.station,
-            "orbit":self.orbit,
-            "tunes":self.tunes,
-            "target":self.target_tune,
+            "score_type":"TMScore",
+            "source_station":self.source_station,
+            "target_station":self.target_station,
+            "central_psv":self.central_psv,
             "transfer_matrix":self.tm.tolist(),
-            "weighted_tunes":self.score
         }
         return output
 

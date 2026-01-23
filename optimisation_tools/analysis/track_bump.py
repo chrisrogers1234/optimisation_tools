@@ -10,7 +10,10 @@ import math
 import glob
 
 import numpy
-import ROOT
+try:
+    import ROOT
+except ModuleNotFoundError:
+    print("track_bump won't work - ROOT not found")
 
 import xboa.common
 from xboa.hit import Hit

@@ -1,5 +1,5 @@
 import copy
-import ROOT
+#import ROOT
 
 def get_point(map_, point_seed_list, value, limits):
     minimiser = Minimiser(map_, point_seed_list, value, limits)
