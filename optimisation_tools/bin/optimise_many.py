@@ -1,3 +1,5 @@
+import math
+import numpy
 import copy
 import subprocess
 import os
@@ -29,6 +31,32 @@ class OptimiseMany:
         subprocess.POpen(command_line_args)
 
     def run_de(self):
+        mode = self.config.get_optimisation_control()["mode"]
+        if mode == "optimise":
+            self.do_optimise()
+        elif mode == "scan":
+            self.do_scan()
+
+    def inv_x(self, param, x):
+        if "scaling" in param:
+            if param["scaling"] == "log":
+                return math.log(x)
+            else:
+                raise ValueError(f"Failed to parse scaling {param['scaling']}")
+        else:
+            return x
+
+    def x(self, param, x):
+        if "scaling" in param:
+            if param["scaling"] == "log":
+                return math.exp(x)
+            else:
+                raise ValueError(f"Failed to parse scaling {param['scaling']}")
+        else:
+            return x
+
+
+    def do_optimise(self):
         maxiter = self.config.get_optimisation_control()["maximum_iteration"]
         atol = self.config.get_optimisation_control()["absolute_tolerance"]
         disp = self.config.get_optimisation_control()["verbose"]
@@ -37,11 +65,13 @@ class OptimiseMany:
         bounds = []
         seed = []
         for param in self.parameter_list:
-            if param["fixed"]:
+            if "fixed" in param and param["fixed"]:
                 continue # we don't give DE the fixed parameters -  we add at func time
-            bounds.append((param["min"], param["max"]))
-            seed.append(param["seed"])
-
+            bounds.append((self.inv_x(param, param["min"]), self.inv_x(param, param["max"])) )
+            seed.append(self.inv_x(param, param["seed"]))
+        print(f"Found {len(self.parameter_list)-len(seed)} fixed parameters and {len(seed)} variable parameters")
+        if len(seed) == 0:
+            raise RuntimeError("No non-fixed parameters - cannot optimise")
 
         result = scipy.optimize.differential_evolution(
             self.run_function, # function, run in a child process
@@ -57,6 +87,26 @@ class OptimiseMany:
         )
         print("Minimisation returns", result)
 
+
+    def do_scan(self):
+        linspace_list = []
+        for param in self.parameter_list:
+            if "fixed" in param and param["fixed"]:
+                continue # add fixed_parameters at func time
+            if "scan_points" not in param or not param["scan_points"]:
+                param["scan_points"] = 1
+            x_min = self.inv_x(param, param["min"])
+            x_max = self.inv_x(param, param["max"])
+            linspace_list.append(numpy.linspace(x_min, x_max, param["scan_points"]))
+            print("SCAN POINTS", x_min, x_max, param["scan_points"])
+        linspace_tuple = tuple(linspace_list)
+        grid = numpy.meshgrid(*linspace_tuple)
+        grid = numpy.array([numpy.ndarray.flatten(item) for item in grid])
+        job_list = numpy.transpose(grid)
+        for job in job_list:
+            self.run_function(job)
+
+
     def callback(self, intermediate_result, convergence=None):
         print("Callback", intermediate_result, self.unique_run_id, convergence)
         self.unique_run_id += 1
@@ -70,8 +120,10 @@ class OptimiseMany:
             if param["fixed"]:
                 func_call.append(param["seed"])
             else:
-                func_call.append(x_value[x_index])
+                func_call.append(self.x(param, x_value[x_index]))
                 x_index += 1
+            if "type" in param:
+                func_call[-1] = param["type"](func_call[-1])
         func_call = [str(value) for value in func_call]
         print("Function call", self.unique_run_id, func_call)
         try:
@@ -84,7 +136,7 @@ class OptimiseMany:
         except:
             print("   ", self.unique_run_id, func_call, "failed!")
             score = 1.1
-            if True:
+            if False:
                 raise
         sys.stdout.flush()
         time.sleep(0.01)
@@ -105,7 +157,19 @@ class ConfigBase:
 
         Order is the order they will be called on the command line
         """
+        parameters = [{
+            "name":"a_parameter",
+            "key":"parameter_key",
+            "seed":1.0,
+            "fixed":False,
+            "min":0.0,
+            "max":1.0,
+            # optional
+            "scan_points":3, # default to 1
+            "type":int, # default to float
+        },] # ...
         raise NotImplementedError("Need to overload this method")
+        return parameters
 
     def get_optimisation_control(self):
         """

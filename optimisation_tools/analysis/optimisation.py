@@ -92,14 +92,18 @@ class Optimisation:
             sys.excepthook(*sys.exc_info())
             post_dict = {"optimisation":{}}
         for an_optimiser in self.optimisation_stages:
-            if self.allow_restart and an_optimiser.allow_restart and an_optimiser.name in post_dict["optimisation"]:
+            if an_optimiser.disable:
+               print(f"\n\n=================== Skipping '{an_optimiser.name}'  ===================")
+               print("     disable flag is true in config")
+            elif self.allow_restart and an_optimiser.allow_restart and an_optimiser.name in post_dict["optimisation"]:
                print(f"\n\n=================== Skipping '{an_optimiser.name}'  ===================")
                print("     Found in optimisation file and allow_restart is true")
             else:
-                print(f"\n\n=================== Running '{an_optimiser.name}'  ====================")
+                print(f"\n\n=================== Running - '{an_optimiser.name}'  ====================")
                 try:
-                    self.run_optimisation(an_optimiser, post_dict)
-                    # write to disk
+                    print("Following optimisers found before", [key for key in post_dict["optimisation"]])
+                    post_dict = self.run_optimisation(an_optimiser, post_dict)
+                    print("Following optimisers found after ", [key for key in post_dict["optimisation"]])
                 except Exception:
                     print("Exception with post_dict")
                     print(json.dumps(post_dict, indent=2))
@@ -123,8 +127,10 @@ class Optimisation:
         an_optimiser.run_optimisation()
         # update following optimisation
         post_dict = utilities.update(post_dict, an_optimiser.post_output())
+        # write to disk
         self.save_data(post_dict)
         print("Saved data for optimisations", [key for key in post_dict["optimisation"]])
+        return post_dict
 
     config_exclusions = ["staged_optimisation"]
 

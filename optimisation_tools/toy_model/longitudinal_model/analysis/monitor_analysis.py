@@ -8,6 +8,9 @@ import numpy
 import scipy
 import matplotlib
 import matplotlib.pyplot
+import rf_programme.piecewise_interpolation
+
+
 
 class DummyCT():
     def __init__(self):
@@ -16,6 +19,16 @@ class DummyCT():
     def fitted(self, t):
         return 1.0
 
+class DummyRFData():
+    def __init__(self):
+        self.chi2 = 0.0
+        self.time_key = "time"
+        self.data_key = "data"
+        self.data = {"time":[0, 1], "data":[0, 0]}
+        self.v_model = rf_programme.piecewise_interpolation.PiecewiseInterpolation()
+        self.v_model.t_list = [0.0, 1.0, 2.0, 3.0]
+        self.v_model.v_list = [0.0]*4
+        self.v_model.f_list = [1.0]*4
 
 class MonitorAnalysis():
     def __init__(self):
@@ -24,12 +37,13 @@ class MonitorAnalysis():
         self.monitor = None
         self.model = None
         self.ct = DummyCT() # current transformer
-        self.rf_data = None
+        self.rf_data = DummyRFData()
         self.max_oned_histo_size = 750000
         self.file_prefix = ""
         self.mountain_chunk_size = 500
         self.fit_stroke = 10
         self.fit_lambda = 1e16 # 0 is perfect spline, higher values weights for second derivative
+        self.f_range = [1.9, 2.1] # search for principle frequency in this range relative to RF frequency
         self.integral_fit_function = None
         self.mountain_offset = None
         self.mountain_hist = None
@@ -38,15 +52,15 @@ class MonitorAnalysis():
     def do_plot(self):
         print("Monitor analysis")
         print("  oned plot")
-        #self.oned_plot()
-        print("  Mountain plot")
-        self.mountain_plot()
-        print("  Integral plot")
-        self.integral_plot()
-        print("  Derivative plot")
-        self.derivative_plot()
+        self.oned_plot()
         print("  FFT plots")
         self.all_fft_plots()
+        print("  Mountain plot")
+        self.mountain_plot()
+        #print("  Integral plot")
+        #self.integral_plot()
+        #print("  Derivative plot")
+        #self.derivative_plot()
 
     def oned_plot(self):
         n_histos = int(len(self.monitor.t_hist)/self.max_oned_histo_size)+1
@@ -207,7 +221,7 @@ class MonitorAnalysis():
         axes.plot(time_list, fit_sum, label="Fitted data")
         axes.set_xlabel("Time [ns]")
         axes.set_ylabel("Integrated beam monitor signal [AU]")
-        axes.set_ylim([-10, 10])
+        #axes.set_ylim([-10, 10])
         axes.text(0.01, 0.95, self.problem_title,
                   transform=axes.transAxes)
         axes.legend()
@@ -244,7 +258,6 @@ class MonitorAnalysis():
         figure_sum.savefig(os.path.join(self.output_directory, f"{self.file_prefix}monitor_turn_integral_derivative.png"))
         figure_sum.clear()
         matplotlib.pyplot.close(figure_sum)
-
 
     def all_fft_plots(self):
         try:
@@ -286,9 +299,8 @@ class MonitorAnalysis():
         figure.clear()
         matplotlib.pyplot.close(figure)
 
-
     def get_rf_time(self):
-        if self.rf_data.chi2 > 0.5:
+        if self.rf_data and self.rf_data.chi2 > 0.5:
             dt = self.config["programme"]["time_delay"]
             t_rf_start = self.config["programme"]["t_list"][1]+dt
             t_rf_end = self.config["programme"]["t_list"][2]+dt

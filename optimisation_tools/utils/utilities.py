@@ -472,7 +472,7 @@ def directory_name(lattice, study, version):
     return dir_name
 
 def directory_name_2(version, name, subs):
-    dir_name = f"output/v{version}/name={name};_"
+    dir_name = f"output/v{version:03d}/name={name};_"
     for key, value in sorted(subs.items()):
         key = key.replace("__", "")
         if type(value) == type(1.0):

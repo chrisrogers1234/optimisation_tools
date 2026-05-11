@@ -6,6 +6,11 @@ import xboa.common
 
 from optimisation_tools.analysis.optimiser import score
 
+"""
+Score based on bunch generated from transfer matrices
+"""
+
+
 class InputBeam:
     def __init__(self):
         pass
@@ -206,7 +211,6 @@ class BunchScore(score.Score):
     def get_input_psv_list(self):
         psv_list = self.beam_gen.get_psv_list()
         return psv_list
-
 
 score.Score.score_types["bunch_score"] = BunchScore
 

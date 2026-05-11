@@ -7,7 +7,7 @@ import numpy
 
 import optimisation_tools.toy_model.longitudinal_model.rf_programme
 import rf_programme.piecewise_interpolation
-import ROOT
+import scipy.optimize
 
 class ExtractRFData:
     def __init__(self):
@@ -26,6 +26,7 @@ class ExtractRFData:
         self.output_directory = "./"
         self.problem_title = ""
         self.chi2 = -1.0
+        self.verbose_fit = True
 
     def load_data(self):
         self.filename = glob.glob(self.file_glob)
@@ -94,18 +95,19 @@ class ExtractRFData:
 
     def fit_voltage(self):
         global EXTRACT
-        x_var = [1e6, 9e6]
-        self.minuit = ROOT.TMinuit(4)
-        self.minuit.DefineParameter(0, "t0", 1e6, 1e5, 0, 0)
-        self.minuit.DefineParameter(1, "t1", 9e6, 1e5, 0, 0)
-        self.minuit.DefineParameter(2, "v0", self.v_peaks_list[0], 0.1, 0, 0)
-        self.minuit.DefineParameter(3, "v1", self.v_peaks_list[-1], 0.1, 0, 0)
-        self.minuit.FixParameter(2)
-        self.minuit.FixParameter(3)
-        EXTRACT = self
-        self.minuit.SetFCN(minuit_function)
-        self.minuit.Command("SIMPLEX "+str(100)+" "+str(1e-3))
-        self.linear_ramp_fit_function(1)
+                      #t0       #t1        #v0                    #v1
+        seed_list  = [1e6,      9e6,       self.v_peaks_list[0],  self.v_peaks_list[-1],]
+        bound_list = [[0, 1e7], [0, 2e7],  [-10, 10],             [-10, 10], ]
+
+        scipy.optimize.differential_evolution(
+                func = self.linear_ramp_fit_function,
+                bounds = bound_list,
+                workers = 1,
+                updating = "deferred",
+                x0 = seed_list,
+                tol = 1e-3
+            )
+        print("\nFinished")
 
     def extract_data(self):
         self.process_voltage_peaks()
@@ -113,19 +115,13 @@ class ExtractRFData:
         self.specgram()
         self.voltage_plot()
 
-    def get_minuit_value(self, i):
-        x = ctypes.c_double()
-        err = ctypes.c_double()
-        self.minuit.GetParameter(i, x, err)
-        return x.value
-
-    def linear_ramp_fit_function(self, verbose=0):
+    def linear_ramp_fit_function(self, x0):
         # fit function like [flat, ramp, flat]
         self.chi2 = 0.0
-        t0 = self.get_minuit_value(0)
-        t1 = self.get_minuit_value(1)
-        v0 = self.get_minuit_value(2)
-        v1 = self.get_minuit_value(3)
+        t0 = x0[0]
+        t1 = x0[1]
+        v0 = x0[2]
+        v1 = x0[3]
         if t1 == t0:
             t0 -= 1
         if t1 < t0:
@@ -138,17 +134,9 @@ class ExtractRFData:
         v_estimated = numpy.array([self.v_model.get_voltage_magnitude(t) for t in self.t_peaks])
         delta_v = v_estimated-self.v_peaks
         self.chi2 = sum(delta_v**2)
-        if verbose:
-            print("    Trying fit with", t0, t1, v0, v1, "yields chi2", self.chi2)
+        if self.verbose_fit:
+            print(f"\r    Trying fit with {t0:8.4g} {t1:8.4g} {v0:8.4g} {v1:8.4g} yields chi2 {self.chi2:8.4g}", end="")
         return self.chi2
-
-EXTRACT = None
-
-def minuit_function(nvar, parameters, score, jacobian, err):
-    global EXTRACT
-    pyscore = EXTRACT.linear_ramp_fit_function()
-    score.value = pyscore
-
 
 def main():
     extractor = ExtractRFData()

@@ -25,9 +25,9 @@ class PlotBeam(object):
         t_list = [self.t_norm(p.t, p_list[0]) for p in p_list]
         e_list = [p.energy for p in p_list]
         figure = matplotlib.pyplot.figure(figsize=(20,10))
-        axes = figure.add_subplot(1, 1, 1,  position=[0.1, 0.3, 0.6, 0.6])
-        if not self.s:
-            self.s = utilities.matplot_marker_size(t_list)
+        axes = figure.add_subplot(1, 1, 1)
+        axes.set_position([0.1, 0.3, 0.6, 0.6])
+        self.s = utilities.matplot_marker_size(t_list)
         axes.set_title("Turn "+suffix)
         axes.set_ylabel("E [MeV]")
         axes.set_xlim(self.t_bins[0], self.t_bins[-1])
@@ -38,7 +38,8 @@ class PlotBeam(object):
         self.plot_energy(axes, self.model, p_list)
         axes.scatter(t_list[0], e_list[0], color="red")
         # time projection
-        axes = figure.add_subplot(1, 1, 1,  position=[0.1, 0.1, 0.6, 0.2])
+        axes = figure.add_subplot(1, 1, 1)
+        axes.set_position([0.1, 0.1, 0.6, 0.2])
         axes.set_xlabel("$[t_i*f_0 - floor(t_i*f_0)] \\times 360$")
         t_hist, t_bin_list, patches = axes.hist(t_list, bins=self.t_bins)
         min_t, max_t = min(t_hist), max(t_hist)
@@ -47,7 +48,8 @@ class PlotBeam(object):
         self.plot_echange(axes, p_list[0], self.model)
         axes.set_xlim(self.t_bins[0], self.t_bins[-1])
 
-        axes = figure.add_subplot(1, 1, 1,  position=[0.7, 0.3, 0.3, 0.6])
+        axes = figure.add_subplot(1, 1, 1)
+        axes.set_position([0.7, 0.3, 0.3, 0.6])
         e_hist, e_bins = numpy.histogram(e_list, 1000, self.e_range)
         axes.barh(e_bins[:-1], e_hist, (e_bins[1]-e_bins[0]), align="center")
         min_e, max_e, mean_e = min(e_list[1:]), max(e_list[1:]), numpy.mean(e_list[1:])

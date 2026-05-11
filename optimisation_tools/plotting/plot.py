@@ -19,7 +19,6 @@ import importlib
 import itertools
 
 import matplotlib
-import ROOT
 
 import xboa.common
 
@@ -379,37 +378,6 @@ class RFAnalyser(object):
 
     def get_seed(self):
         pass
-
-    def sine_fit(self, centre, var, time_window):
-        voltage = max(self.y_list)
-        frequency = 1e-3
-        crossings = []
-        for i, y in enumerate(self.y_list[1:]):
-            if y > 0. and self.y_list[i] < 0: 
-                crossings.append(i)
-        if len(crossings) > 0:
-            t0 = self.x_list[crossings[0]]
-        print(crossings)#[1], crossings[0]
-        #print "FIT CROSSINGS", self.x_list[crossings[1]], self.x_list[crossings[0]]
-        if len(crossings) > 1:
-            frequency = 1./(self.x_list[crossings[1]]-self.x_list[crossings[0]])
-        frequency *= 2.*math.pi
-        print("Seeding sine fit with", t0, frequency, voltage)
-        fitter = ROOT.TF1("sin "+str(len(self.root_objects)), "[0]*sin([1]*(x-[2]))")
-        fitter.SetParameter(0, voltage)
-        fitter.SetParameter(1, frequency)
-        fitter.SetParameter(2, t0)
-        fitter.SetRange(min(self.x_list), max(self.x_list))
-        #fitter.Draw("SAME")
-        self.graph.Fit(fitter)
-        self.canvas.Update()
-        self.root_objects.append(fitter)
-        rf_parameters = {
-            "voltage":fitter.GetParameter(0),
-            "frequency":fitter.GetParameter(1)/2./math.pi,
-            "t0":fitter.GetParameter(2)
-        }
-        return rf_parameters
 
 class PlotFields(object):
     def __init__(self, fields, orbit_plotter = [], polygon_plotter=None):

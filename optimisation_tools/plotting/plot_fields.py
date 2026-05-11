@@ -10,7 +10,6 @@ import glob
 import shutil
 
 import matplotlib
-import ROOT
 
 import xboa.common
 
@@ -73,6 +72,15 @@ def injection():
     name = f"injection_zoom_out_track_by={by}"
 
     plot_range = [45, 135]
+    return base_dir, run_dir, orbit_folder_list, plot_range, name, "fets_ffa"
+
+def isis1():
+    ref_dir = "/home/cr67/work/2026-04-01_isis1/isis_opal"
+    base_dir = "/home/cr67/work/2017-07-07_isis2/horizontal_isis3/output/2023-03-01_baseline/find_bump_v18/"
+    run_dir = f"{ref_dir}/bump={dx1}_by={by}_bumpp={bumpp}/track_bump_full/plotting"
+    orbit_folder_list = []
+    plot_range = [0.0, 360.0]
+    name = "plot"
     return base_dir, run_dir, orbit_folder_list, plot_range, name, "fets_ffa"
 
 def generate_name(folder):

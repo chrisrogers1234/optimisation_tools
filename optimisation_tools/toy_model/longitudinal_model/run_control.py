@@ -148,7 +148,7 @@ class RunControl:
         file_prefix = self.config["mc_monitor"]["plot_prefix"]
         print("Load monitor")
         self.monitor.load()
-        self.run_analysis(self.monitor, file_prefix)
+        self.run_analysis(self.monitor, None, None, file_prefix)
 
     def setup_rf_data(self):
         rf_data = real_data.extract_rf_data.ExtractRFData()
@@ -193,8 +193,10 @@ class RunControl:
         my_analysis = analysis.monitor_analysis.MonitorAnalysis()
         my_analysis.model = self.model
         my_analysis.monitor = monitor
-        my_analysis.ct = ct_data
-        my_analysis.rf_data = rf_data
+        if ct_data:
+            my_analysis.ct = ct_data
+        if rf_data:
+            my_analysis.rf_data = rf_data
         my_analysis.config = self.config
         my_analysis.problem_title = self.config["run_control"]["problem_title"]
         my_analysis.max_oned_histo_size = self.config["analysis"]["max_oned_histo_size"]

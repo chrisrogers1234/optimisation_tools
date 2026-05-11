@@ -1,4 +1,5 @@
 import math
+import copy
 
 import optimisation_tools.utils.utilities as utilities
 
@@ -91,6 +92,17 @@ class LongitudinalModel(object):
               "new_time", new_time,
               "new delta e", self.rf_program.get_voltage(new_time))
 
+    def inject_beam(self, running_particles, stored_particles):
+        test_ref = copy.deepcopy(running_particles[0])
+        self.one_turn(test_ref)
+        one_turn_time = (running_particles[0].t+test_ref.t)/2.0
+        print("Ref Time this turn", running_particles[0].t, "next turn", test_ref.t)
+        running_particles += [p for p in stored_particles if p.t <= one_turn_time]
+        stored_particles = [p for p in stored_particles if p.t > one_turn_time]
+        print(len(running_particles), "running", len(stored_particles), "stored")
+        return running_particles, stored_particles
+
+
     def one_turn_beam(self, a_particle_collection):
         for a_particle in a_particle_collection:
             self.one_turn(a_particle)
@@ -99,18 +111,21 @@ class LongitudinalModel(object):
         if (not max_time) and (not max_turn):
             raise ValueError("Must specify a max turn or max time")
         turn = 0
+        running_particles = [particle_collection[0]] # injected
+        stored_particles = particle_collection[1:] # not injected yet
         while True:
-            self.one_turn_beam(particle_collection)
+            running_particles, stored_particles = self.inject_beam(running_particles, stored_particles)
+            self.one_turn_beam(running_particles)
             if max_time:
-                particle_collection = [p for p in particle_collection if p.t <= max_time]
-            particle_collection = [p for p in particle_collection if p.energy > 0.0]
-            self.do_turn_action(turn, particle_collection)
+                running_particles = [p for p in running_particles if p.t <= max_time]
+            running_particles = [p for p in running_particles if p.energy > 0.0]
+            self.do_turn_action(turn, running_particles)
             turn += 1
             if max_turn and turn > max_turn:
                 break
-            if len(particle_collection) == 0:
+            if len(running_particles) == 0: # note we can quite even if there are still not injected particles
                 break
-            self.set_to_reference_particle(particle_collection[0])
+            self.set_to_reference_particle(running_particles[0])
 
     def do_turn_action(self, turn, particle_collection):
         pass

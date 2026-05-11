@@ -14,6 +14,7 @@ class OptimiserBase:
         self.score = None
         self.type = None
         self.allow_restart = True
+        self.disable = False
         self.score_result = None
         self.maximum_final_score = sys.float_info.max # if score > max, fail the optimisation
 
@@ -41,6 +42,14 @@ class OptimiserBase:
 
     ######### Some implementation/utility methods #############
 
+    def process_parameters(self, x):
+        index = 0
+        for par in parameter_list:
+            if par.fixed:
+                continue
+            par.current_value = x[index]
+            index += 1
+
     def receive_output(self, post_dict):
         """
         Messaging protocol for messaging between parameters and scores and over
@@ -54,6 +63,7 @@ class OptimiserBase:
         #self.score_result = post_dict["score_result"]
 
     def post_output(self):
+        print("OPTIMISER_BASE POST OUTPUT")
         for parameter in self.parameter_list:
             self.message_dict.update(parameter.post_output())
         self.message_dict.update(self.score.post_output())
@@ -61,6 +71,7 @@ class OptimiserBase:
         return self.message_dict
 
     def store_data(self):
+        print("OPTIMISER_BASE STORE_DATA", self.score_result)
         summary = {
             "name":self.name,
             "parameter_list":[par.store_data() for par in self.parameter_list],

@@ -21,7 +21,7 @@ from optimisation_tools.utils.decoupled_transfer_matrix import DecoupledTransfer
 DecoupledTransferMatrix.det_tolerance = 1
 
 class PlotG4BL(object):
-    def __init__(self, run_dir_glob, co_file, reference_file, reference_file_format, plot_dir, max_score):
+    def __init__(self, plot_dir, max_score):
         self.plot_dir = plot_dir
         self.co_data = []
         self.min_n_cells = 500
@@ -29,6 +29,9 @@ class PlotG4BL(object):
         self.min_p = 149
         self.max_p = 231
         utilities.clear_dir(plot_dir)
+
+
+    def load_data(self, run_dir_glob, co_file, reference_file, reference_file_format):
         self.load_data(run_dir_glob, co_file, reference_file, reference_file_format)
         self.color_lambda = lambda data: data["bunch_list"][0][0]["p"]
 
@@ -338,18 +341,20 @@ class PlotG4BL(object):
     beta_limit = 1e4
 
 def main():
-    run_dir = "output/demo_apr25_v005/"
-    run_dir_glob = [run_dir+f"pz_beam=176"]#;_by=0.5;_dp_pos=0.08;_polarity=++++/"]
-    plot_dir = run_dir+f"/plot_tune_coarser/"
+    run_dir = "output/v054/"
+    run_dir_glob = [run_dir+f"name=cooling;_*by=0.05*"]#;_by=0.5;_dp_pos=0.08;_polarity=++++/"]
+    plot_dir = run_dir+f"/plot_tune/"
 
     file_name = "track_beam_amplitude/da_scan/output*.txt"
     co_file_name = "closed_orbits_cache"
     file_format = "icool_for009"
-    plotter = PlotG4BL(run_dir_glob, co_file_name, file_name, file_format, plot_dir, 1e9)
+    plotter = PlotG4BL(plot_dir, 1e9)
     plotter.beta_limit = 1e4
-    plotter.max_p = 231
+    plotter.min_p = 15
+    plotter.max_p = 41
     plotter.min_n_cells = 10
     plotter.color_lambda = lambda data: data["subs"]["__momentum__"]
+    plotter.load_data(run_dir_glob, co_file_name, file_name, file_format)
     plotter.do_plots()
 
 

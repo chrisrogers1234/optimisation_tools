@@ -155,7 +155,7 @@ def load_configs():
         print(f"Found exe {exe}")
     except AttributeError:
         sys.excepthook(*sys.exc_info())
-        exe = os.path.expandvars("${OPTIMISATION_TOOLS}/bin/run_one.py")
+        exe = os.path.expandvars("${OPTIMISATION_TOOLS}/optimisation_tools/bin/run_one.py")
     return job_list, exe
 
 def main(config_file):
