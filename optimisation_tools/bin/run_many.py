@@ -156,6 +156,7 @@ def load_configs():
     except AttributeError:
         sys.excepthook(*sys.exc_info())
         exe = os.path.expandvars("${OPTIMISATION_TOOLS}/optimisation_tools/bin/run_one.py")
+        print("  Using default exe:", exe)
     return job_list, exe
 
 def main(config_file):

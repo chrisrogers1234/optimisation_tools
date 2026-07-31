@@ -5,6 +5,7 @@ import subprocess
 import os
 import time
 import sys
+import multiprocessing
 
 import scipy
 import scipy.optimize
@@ -98,13 +99,16 @@ class OptimiseMany:
             x_min = self.inv_x(param, param["min"])
             x_max = self.inv_x(param, param["max"])
             linspace_list.append(numpy.linspace(x_min, x_max, param["scan_points"]))
-            print("SCAN POINTS", x_min, x_max, param["scan_points"])
+            print(f"Scanning '{param['name']}' from {x_min} to {x_max} with {param['scan_points']} points")
         linspace_tuple = tuple(linspace_list)
         grid = numpy.meshgrid(*linspace_tuple)
         grid = numpy.array([numpy.ndarray.flatten(item) for item in grid])
         job_list = numpy.transpose(grid)
-        for job in job_list:
-            self.run_function(job)
+        workers = self.config.get_optimisation_control()["workers"]
+        with multiprocessing.Pool(workers) as a_pool:
+            a_pool.map(self.run_function, job_list)
+        #for job in job_list:
+        #    self.run_function(job)
 
 
     def callback(self, intermediate_result, convergence=None):
@@ -125,6 +129,10 @@ class OptimiseMany:
             if "type" in param:
                 func_call[-1] = param["type"](func_call[-1])
         func_call = [str(value) for value in func_call]
+        score = self.function_call(func_call)
+        return score
+
+    def function_call(self, func_call):
         print("Function call", self.unique_run_id, func_call)
         try:
             logname = self.config.get_log_filename(func_call)
@@ -141,6 +149,7 @@ class OptimiseMany:
         sys.stdout.flush()
         time.sleep(0.01)
         return score
+
 
 class ConfigBase:
     """
