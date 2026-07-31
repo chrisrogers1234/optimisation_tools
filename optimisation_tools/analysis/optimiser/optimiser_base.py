@@ -63,7 +63,6 @@ class OptimiserBase:
         #self.score_result = post_dict["score_result"]
 
     def post_output(self):
-        print("OPTIMISER_BASE POST OUTPUT")
         for parameter in self.parameter_list:
             self.message_dict.update(parameter.post_output())
         self.message_dict.update(self.score.post_output())
@@ -71,7 +70,6 @@ class OptimiserBase:
         return self.message_dict
 
     def store_data(self):
-        print("OPTIMISER_BASE STORE_DATA", self.score_result)
         summary = {
             "name":self.name,
             "parameter_list":[par.store_data() for par in self.parameter_list],
