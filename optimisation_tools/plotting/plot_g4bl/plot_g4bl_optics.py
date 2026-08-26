@@ -604,16 +604,17 @@ def fname(prefix, params, ignore_globs):
 
 
 def main():
-    run_dir = "output/v054/"
+    run_dir = "output/v061/"
     params = [
-        ("by", "0.05"),
-        ("dt", "0.0001"),
-        ("dtheta", "0.6"),
-        ("efield", "1"),
-        ("gap", "1000"),
-        ("iris_factor", "0.5"),
-        ("pz", "*"),
-        ("window_dt", "0"),
+            ("by", "0.2"),
+            ("dt", "*"),
+            ("dtheta", "*"),
+            ("efield", "*"),
+            ("gap", "*"),
+            ("iris_factor", "*"),
+            ("pz", "*"),
+            ("roll", "270"),
+            ("window_dt", "*"),
     ]
 
     run_dir_glob = fname(f"{run_dir}/name=cooling;_", params, False)

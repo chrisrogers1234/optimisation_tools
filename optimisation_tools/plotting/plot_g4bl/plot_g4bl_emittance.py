@@ -876,22 +876,21 @@ def low_energy_cooling_dress(plotter):
 def main():
     tracking = "beam"
     variables = [
-        ("by", "*"),
-        ("dt", "*"),
-        ("dtheta", "*"),
+        ("by", "0.1367"),
+        ("dt", "27.93"),
+        ("dtheta", "15.92"),
         ("efield", "*"),
         ("gap", "*"),
         ("iris_factor", "*"),
         ("pz", "*"),
-        ("roll", "90"),
+        ("roll", "270"),
         ("window_dt", "*"),
     ]
     amp_trans_max = 150
     amp_long_max = 300
-    run_dir = "output/v048/"
+    run_dir = "output/v067/"
     job = "best"
-    #run_dir_glob = f"{run_dir}/name=cooling"
-    run_dir_glob = f"{run_dir}/clone_best_rf_max=30/"
+    run_dir_glob = f"{run_dir}/best/"
     #run_dir_glob = make_run_dir_glob(run_dir, variables)
     for a_dir in ["cooling_a-pz=0.9", "equilibrium_emittance", "time_scan", "reference_trajectory", "rf_phase"][0:1]:
         optimisation_dir = a_dir
@@ -912,9 +911,9 @@ def main():
         plotter.e_min = 0.0
         plotter.e_max = 500.0
         plotter.z_range = [None, None]#[50*1e3, 150*1e3] #
-        plotter.emit_range = [0.0, 5.0]
-        plotter.emit6d_range = [0.0, 12.0]
-        plotter.max_station = 200 # max station for phase space plots
+        plotter.emit_range = [0.0, 2.50001]
+        plotter.emit6d_range = [0.0, 6.00001]
+        plotter.max_station = 1000 # max station for phase space plots
         plotter.station_stroke = 1 # stroke station for phase space plots
         plotter.frequency = frequency
         #low_energy_cooling_dress(plotter) ############## <------------------ WARNING

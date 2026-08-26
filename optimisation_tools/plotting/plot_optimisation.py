@@ -10,10 +10,14 @@ class Plotter:
         self.data = []
         self.delta_subs = []
         self.best_name = "best"
+        self.y_var = "fom_1"
         self.y_label = "Score"
         self.y_lambda = lambda y: y
+        self.max_score = None # set to None to ignore this cut
+        self.sub_cuts = {} # mapping from sub name to [lower_bound, upper_bound]; set to None to ignore a bound
+        self.cut_list = []
 
-    def load_one_dir(self, a_dir):
+    def load_one_dir_low_energy(self, a_dir):
         my_result = {}
         try:
             with open(f"{a_dir}/output.json") as fin:
@@ -50,20 +54,33 @@ class Plotter:
                 if wt_us < 200:
                     return None
 
-                my_result["score"] = et_ds/et_us * el_ds/el_us * (wt_us/wt_ds)**2
+                my_result["score"] = cooling_score["total_score"]
+                my_result["fom_product"] = et_ds/et_us*el_ds/el_us*(wt_us/wt_ds)**2
+                my_result["fom_sum"] = et_ds/et_us+el_ds/el_us+(wt_us/wt_ds)**2
         except (FileNotFoundError, KeyError):
             if score_json:
                 print(score_json["optimisation"].keys())
             sys.excepthook(*sys.exc_info())
             return None
-        if my_result["score"] > 1.5:
-            return None
         with open(f"{a_dir}/subs_list.json") as fin:
             my_result["config"] = {"substitutions":json.load(fin)[0]}
             my_result["config"]["run_dir"] = a_dir
-        #if my_result["config"]["substitutions"]["__rf_efield__"] > 25:
-        #    return None
+        if self.is_cut(my_result):
+            return None
         return my_result
+
+    def is_cut(self, my_result):
+        if self.max_score is not None and my_result[self.y_var] > self.max_score:
+            return True
+        subs = my_result["config"]["substitutions"]
+        for sub_name in self.sub_cuts:
+            [lower_bound, upper_bound] = self.sub_cuts[sub_name]
+            if lower_bound is not None and subs[sub_name] < lower_bound:
+                return True
+            if upper_bound is not None and subs[sub_name] > upper_bound:
+                return True
+        return False
+
 
     def get_glob(self, dir_glob):
         dir_list = []
@@ -76,7 +93,7 @@ class Plotter:
 
     def load_files(self, dir_glob):
         self.data = []
-        fail_counter = 0
+        fail_counter, cut_counter = 0, 0
         dir_list = self.get_glob(dir_glob)
         for a_dir in dir_list[:]:
             if not os.path.isdir(a_dir):
@@ -85,15 +102,18 @@ class Plotter:
                 my_result = self.load_one_dir(a_dir)
                 if my_result:
                     self.data.append(my_result)
+                else:
+                    cut_counter += 1
             except:
                 fail_counter += 1
                 if fail_counter < 3:
                     sys.excepthook(*sys.exc_info())
                 elif fail_counter == 3:
+
                     print(">>>>>>>>>>>>>>>>>> Detected more than 3 fails, no bother printo <<<<<<<<<<<<<<<<<<<<")
-        self.data = sorted(self.data, key=lambda item: item["score"])
+        self.data = sorted(self.data, key=lambda item: item[self.y_var])
         self.get_deltas()
-        print("Loaded", len(self.data), "with", fail_counter, "fails and subs:")
+        print("Loaded", len(self.data), "with", fail_counter, "fails", cut_counter, "cuts and subs:")
         print(self.delta_subs)
 
     def get_deltas(self):
@@ -115,7 +135,7 @@ class Plotter:
 
     def plot_one_item(self, var_x):
         x_list = [item["config"]["substitutions"][var_x] for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
-        y_list = [self.y_lambda(item["score"]) for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
+        y_list = [self.y_lambda(item[self.y_var]) for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
         x_label =  self.x_label(var_x)
         figure = matplotlib.pyplot.figure(x_label)
         axes = figure.add_subplot(1, 1, 1)
@@ -124,13 +144,14 @@ class Plotter:
             axes.semilogx()
         axes.set_xlabel(x_label)
         axes.set_ylabel(self.y_label)
+        axes.set_ylim(self.vmin, self.vmax)
         x_name = var_x.replace("__", "")
         figure.savefig(f"{self.plot_dir}/optimisation_{x_name}.png")
 
     def plot_two_items(self, var_x, var_y):
         x_list = [item["config"]["substitutions"][var_x] for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
         y_list = [item["config"]["substitutions"][var_y] for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
-        z_list = [self.y_lambda(item["score"]) for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
+        z_list = [self.y_lambda(item[self.y_var]) for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
         x_label =  self.x_label(var_x)
         y_label =  self.x_label(var_y)
         figure = matplotlib.pyplot.figure(x_label+" vs "+y_label)
@@ -138,7 +159,7 @@ class Plotter:
         #axes.stem(x_list, y_list, z_list, bottom=max(z_list))#, cmap="viridis", s=4)
         #axes.set_zlabel(self.y_label)
         axes = figure.add_subplot(1, 1, 1)
-        axes.scatter(x_list, y_list, c=z_list, cmap="viridis", s=4, vmin=0.5, vmax=1.0)
+        scat = axes.scatter(x_list, y_list, c=z_list, cmap="viridis", s=4, vmin=self.vmin, vmax=self.vmax)
         if var_x in self.log_scaling and var_y in self.log_scaling:
             axes.loglog()
         elif var_x in self.log_scaling:
@@ -150,6 +171,7 @@ class Plotter:
         axes.set_ylabel(y_label)
         x_name = var_x.replace("__", "")
         y_name = var_y.replace("__", "")
+        figure.colorbar(scat)
         figure.savefig(f"{self.plot_dir}/optimisation_{x_name}_{y_name}.png")
 
 
@@ -164,7 +186,6 @@ class Plotter:
             return self.labels[var_x]
         else:
             return var_x.replace("__", "").replace("_", " ")
-
 
     def print_best(self):
         print(f"Found best with score {self.data[0]['score']}")
@@ -201,24 +222,33 @@ class Plotter:
     ]
 
 def low_energy_muons(plotter):
-    plotter.plot_dir = "output/v37/"
+    plotter.plot_dir = "output/v055/"
     plotter.y_label = "Transmission [%]"
     plotter.y_lambda = lambda y: (1-y)*100
-    plotter.load_files(["output/v35/*", "output/v36/*", "output/v37/*"])
+    plotter.load_one_dir = plotter.load_one_dir_low_energy
+    plotter.load_files(["output/v055/*"])
 
 def cooling(plotter):
-    plotter.plot_dir = "output/v050/"
-    plotter.y_label = "Score"
-    #et_ds/et_us * el_ds/el_us * (wt_us/wt_ds)**2
-    plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}}\\,\\frac{\\varepsilon_{l}^{ds}}{\\varepsilon_{l}^{us}}\\,\\frac{1}{T_{trans}^2}$"
+    plotter.plot_dir = "output/v068/"
+    plotter.y_var = "fom_sum" # fom_sum or fom_product
+    if plotter.y_var == "fom_sum":
+        plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}} + "+\
+                           "\\frac{\\varepsilon_{l}^{ds}}{\\varepsilon_{l}^{us}} + \\frac{1}{T_{trans}^2}$"
+        plotter.vmin, plotter.vmax = [2.5, 3.25]
+        plotter.max_score = 5.0
+    elif plotter.y_var == "fom_product":
+        plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}}\\,\\frac{\\varepsilon_{l}^{ds}}{\\varepsilon_{l}^{us}}\\,\\frac{1}{T_{trans}^2}$"
+        plotter.vmin, plotter.vmax = [0.5, 1.5]
+        plotter.max_score = 1.5
+    plotter.sub_cuts = {}
     plotter.y_lambda = lambda y: y
     plotter.load_one_dir = plotter.load_one_dir_cooling
     plotter.load_files(f"{plotter.plot_dir}/name*")
 
 def main():
     plotter = Plotter()
-    low_energy_muons(plotter)
-    #cooling(plotter)
+    #low_energy_muons(plotter)
+    cooling(plotter)
     plotter.do_plots()
 
 

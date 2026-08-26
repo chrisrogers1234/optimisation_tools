@@ -447,22 +447,22 @@ def main():
     """
     Plot DA calculation following track beam call
     """
-    run_dir = "output/demo_apr25_v031/"
-    for by in ["0.1"]:
-        for dp_pos in ["0.025", "0.05", "0.1", "0.15", "0.2", "0.225"]:
-            for dp_length in ["200"]:
-                try:
-                    args = [
-                        ("pz", "*"),
-                        ("by", "0.2"),
-                        ("dt", "20"),
-                        ("dtheta", "10"),
-                        ("phi_s", "20"),
-                        ("efield", "30"),
-                    ]
-                    do_plot(run_dir, args)
-                except Exception:
-                    sys.excepthook(*sys.exc_info())
+    run_dir = "output/demo_apr25_v061/"
+    try:
+        args = [
+            ("by", "0.2"),
+            ("dt", "*"),
+            ("dtheta", "*"),
+            ("efield", "*"),
+            ("gap", "*"),
+            ("iris_factor", "*"),
+            ("pz", "*"),
+            ("roll", "270"),
+            ("window_dt", "*"),
+        ]
+        do_plot(run_dir, args)
+    except Exception:
+        sys.excepthook(*sys.exc_info())
 
 if __name__ == "__main__":
     main()

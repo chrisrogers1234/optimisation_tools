@@ -6,6 +6,10 @@ Figure of merit is
 
 Tracked beam sets up using dispersion, amplitude momentum coefficient, etc
 """
+import operator
+
+import numpy
+
 import xboa
 import xboa.common
 import xboa.bunch
@@ -167,7 +171,7 @@ class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
         return score
 
     def get_score(self, hit_list_of_lists):
-        # Score is upstream emittance ratios * transmission ratio. Note that we
+        # Score is sum upstream emittance ratios + transmission ratio. Note that we
         # cannot do a transmission cut in the experiment so we won't do it in
         # analysis
         score_us = self.get_calc(self.station_us, hit_list_of_lists)
@@ -175,7 +179,9 @@ class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
         transmission = score_ds["weight"]/score_us["weight"]
         emit_trans = score_ds["emit_perp"]/score_us["emit_perp"]
         emit_long = score_ds["emit_long"]/score_us["emit_long"]
-        score = emit_trans*emit_long/transmission/transmission
+        #score = emit_trans*emit_long/transmission/transmission
+        score = emit_trans + emit_long + 1/transmission**2
+        print("FigureOfMeritScore got score et:", emit_trans, "el:" emit_long, "trans:", transmission, "score:", score)
         # note low score is better - we are trying to minimise after all
         self.output = {
             "score_type":"CovScore",
