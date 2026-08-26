@@ -888,9 +888,9 @@ def main():
     ]
     amp_trans_max = 150
     amp_long_max = 300
-    run_dir = "output/v067/"
+    run_dir = "output/v068/"
     job = "best"
-    run_dir_glob = f"{run_dir}/best/"
+    run_dir_glob = f"{run_dir}/*best*/"
     #run_dir_glob = make_run_dir_glob(run_dir, variables)
     for a_dir in ["cooling_a-pz=0.9", "equilibrium_emittance", "time_scan", "reference_trajectory", "rf_phase"][0:1]:
         optimisation_dir = a_dir

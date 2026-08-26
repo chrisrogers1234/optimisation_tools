@@ -1,3 +1,4 @@
+import shutil
 import sys
 import json
 import glob
@@ -127,6 +128,9 @@ class Plotter:
         self.delta_subs = sorted(list(delta_subs))
 
     def do_plots(self):
+        if os.path.exists(self.plot_dir):
+            shutil.rmtree(self.plot_dir)
+        os.makedirs(self.plot_dir)
         for i, var_x in enumerate(self.delta_subs):
             self.plot_one_item(var_x)
             for var_y in self.delta_subs[i+1:]:
@@ -229,7 +233,7 @@ def low_energy_muons(plotter):
     plotter.load_files(["output/v055/*"])
 
 def cooling(plotter):
-    plotter.plot_dir = "output/v068/"
+    run_dir = "output/v069/"
     plotter.y_var = "fom_sum" # fom_sum or fom_product
     if plotter.y_var == "fom_sum":
         plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}} + "+\
@@ -240,19 +244,56 @@ def cooling(plotter):
         plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}}\\,\\frac{\\varepsilon_{l}^{ds}}{\\varepsilon_{l}^{us}}\\,\\frac{1}{T_{trans}^2}$"
         plotter.vmin, plotter.vmax = [0.5, 1.5]
         plotter.max_score = 1.5
+    else:
+        raise RuntimeError("Did not recognise y_var")
+    plotter.best_name = f"{plotter.y_var}_{plotter.best_name}"
+    plotter.plot_dir = f"{run_dir}/{plotter.y_var}_optimisation_plot/"
     plotter.sub_cuts = {}
     plotter.y_lambda = lambda y: y
     plotter.load_one_dir = plotter.load_one_dir_cooling
-    plotter.load_files(f"{plotter.plot_dir}/name*")
+    plotter.load_files(f"{run_dir}/name*")
+
+def cleanup(plotter, files_to_clean):
+    root_dir = plotter.get_path_root()
+    print("Cleaning", root_dir)
+    dirlist = sorted(glob.glob(f"{root_dir}/*"))
+    tmp_dirlist = [d for d in dirlist]
+    for a_dir in tmp_dirlist:
+        if os.path.islink(a_dir):
+            realpath = os.path.realpath(a_dir)
+            try:
+                dirlist.remove(a_dir) # if we have multiple symlinks pointing at same directory, remove(realpath) will throw ValueError
+                dirlist.remove(realpath)
+            except ValueError:
+                print("Failed to remove realpath ", realpath, "from", a_dir)
+            print(f"    Not cleaning {realpath} pointed by {a_dir}")
+    print(f"   Cleaning {len(dirlist)}/{len(tmp_dirlist)}")
+    for i, a_dir in enumerate(dirlist):
+        for a_file in files_to_clean:
+            targets = glob.glob(f"{a_dir}/{a_file}")
+            if i < 10 and len(targets) > 0:
+                print(f"      e.g. {a_dir}")
+            for a_target in targets:
+                if i == 0:
+                    print(f"       {a_target.replace(a_dir, '')}")
+                os.unlink(a_target)
 
 def main():
     plotter = Plotter()
     #low_energy_muons(plotter)
     cooling(plotter)
     plotter.do_plots()
-
+    if "--cleanup" in sys.argv:
+        cleandir = "tmp/optimisation/*/"
+        cleanup(plotter, [cleandir+"output.txt", cleandir+"beam.tmp", cleandir+"solenoid_field_map.txt"])
 
 if __name__ == "__main__":
     main()
     matplotlib.pyplot.show(block=False)
     input("Press <CR> to finish")
+
+"""
+lrwxrwxrwx   1 cr67 cr67  216 Aug 26 14:03 best -> /mnt/7cc64665-84f7-47bb-9085-dff72d2de173/data/work/2020-07-06_mc/cooling-channel/output/v068/name=cooling;_by=0.1371;_dt=29.31;_dtheta=17.36;_efield=30;_gap=1000;_iris_factor=0.4908;_pz=200;_roll=270;_window_dt=0.15
+lrwxrwxrwx   1 cr67 cr67  216 Aug 26 14:04 fom_product_best -> /mnt/7cc64665-84f7-47bb-9085-dff72d2de173/data/work/2020-07-06_mc/cooling-channel/output/v068/name=cooling;_by=0.1371;_dt=29.31;_dtheta=17.36;_efield=30;_gap=1000;_iris_factor=0.4908;_pz=200;_roll=270;_window_dt=0.15
+lrwxrwxrwx   1 cr67 cr67  216 Aug 26 14:42 fom_sum_best -> /mnt/7cc64665-84f7-47bb-9085-dff72d2de173/data/work/2020-07-06_mc/cooling-channel/output/v068/name=cooling;_by=0.1478;_dt=25.87;_dtheta=14.38;_efield=30;_gap=1000;_iris_factor=0.4908;_pz=200;_roll=270;_window_dt=0.15
+"""

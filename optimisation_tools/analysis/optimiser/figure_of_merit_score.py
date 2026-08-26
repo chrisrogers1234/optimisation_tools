@@ -181,7 +181,7 @@ class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
         emit_long = score_ds["emit_long"]/score_us["emit_long"]
         #score = emit_trans*emit_long/transmission/transmission
         score = emit_trans + emit_long + 1/transmission**2
-        print("FigureOfMeritScore got score et:", emit_trans, "el:" emit_long, "trans:", transmission, "score:", score)
+        print("FigureOfMeritScore got score et:", emit_trans, "el:", emit_long, "trans:", transmission, "score:", score)
         # note low score is better - we are trying to minimise after all
         self.output = {
             "score_type":"CovScore",
