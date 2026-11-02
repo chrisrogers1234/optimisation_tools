@@ -9,6 +9,7 @@ class OptimiserBase:
         self.name = "No name"
         self.message_dict = {"optimisation":{}}
         self.config = None
+        self.optimiser_config = None
         self.parameter_list = []
         self.tracking = None
         self.score = None
@@ -74,6 +75,7 @@ class OptimiserBase:
             "name":self.name,
             "parameter_list":[par.store_data() for par in self.parameter_list],
             "score":self.score.store_data(),
-            "score_result":self.score_result
+            "score_result":self.score_result,
+            "config":optimiser_config
         }
         return summary

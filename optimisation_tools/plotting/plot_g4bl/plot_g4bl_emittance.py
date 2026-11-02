@@ -35,7 +35,7 @@ class PlotG4BLEmittance(object):
         self.emit_range = [0.0, 5.0]
         self.emit6d_range = [0.0, 0.1]
         self.ct_range = [-20*300.0, 100*300.0]
-        self.z_range = [None, None]
+        self.z_range = [10.0, 40.0]
         self.file_format = file_format
         self.colors = []
         self.title = ""
@@ -343,13 +343,15 @@ class PlotG4BLEmittance(object):
         self.out_json["beta"+suffix] = [self.get("beta", ["x", "y"], bunch) for bunch in data["bunch_list"]]
         self.regularise_out_json_lists() # make sure they are same length and no inf/nan
 
+
         print(f"\n{suffix} cut: ")
-        print("  z [m]       ", "".join([f"{z/1e3:12.4g}" for z in self.out_json["z"][::10]]))
+        strk = 5
+        print("  z [m]       ", "".join([f"{z/1e3:12.4g}" for z in self.out_json["z"][::strk]]))
         if is_post_cut:
-            print("  Transmission", "".join([f"{trans:12.4g}" for trans in self.out_json["percent_transmission"][::10]]))
-        print("  Trans emit  ", "".join([f"{emit:12.4g}" for emit in self.out_json["emittance_perp"+suffix] [::10]]))
-        print("  Long emit   ", "".join([f"{emit:12.4g}" for emit in self.out_json["emittance_long"+suffix] [::10]]))
-        print("  6D emit     ", "".join([f"{emit:12.4g}" for emit in self.out_json["emittance_6d"+suffix] [::10]]))
+            print("  Transmission", "".join([f"{trans:12.4g}" for trans in self.out_json["percent_transmission"][::strk]]))
+        print("  Trans emit  ", "".join([f"{emit:12.4g}" for emit in self.out_json["emittance_perp"+suffix] [::strk]]))
+        print("  Long emit   ", "".join([f"{emit:12.4g}" for emit in self.out_json["emittance_long"+suffix] [::strk]]))
+        print("  6D emit     ", "".join([f"{emit:12.4g}" for emit in self.out_json["emittance_6d"+suffix] [::strk]]))
 
     def plots_beamline(self, data):
         suffix = self.get_suffix(True)
@@ -876,21 +878,15 @@ def low_energy_cooling_dress(plotter):
 def main():
     tracking = "beam"
     variables = [
-        ("by", "0.1367"),
-        ("dt", "27.93"),
-        ("dtheta", "15.92"),
-        ("efield", "*"),
-        ("gap", "*"),
-        ("iris_factor", "*"),
-        ("pz", "*"),
-        ("roll", "270"),
-        ("window_dt", "*"),
+        ("gap", "1000"),
+        ("rf_gap_phase_delta", "0"),
+        ("rf_gap_scale", "1"),
     ]
     amp_trans_max = 150
     amp_long_max = 300
-    run_dir = "output/v068/"
+    run_dir = "output/v067/"
     job = "best"
-    run_dir_glob = f"{run_dir}/*best*/"
+    run_dir_glob = f"{run_dir}/fom_sum_best/"
     #run_dir_glob = make_run_dir_glob(run_dir, variables)
     for a_dir in ["cooling_a-pz=0.9", "equilibrium_emittance", "time_scan", "reference_trajectory", "rf_phase"][0:1]:
         optimisation_dir = a_dir
@@ -910,9 +906,10 @@ def main():
         plotter.amp_long_max = amp_long_max
         plotter.e_min = 0.0
         plotter.e_max = 500.0
-        plotter.z_range = [None, None]#[50*1e3, 150*1e3] #
-        plotter.emit_range = [0.0, 2.50001]
-        plotter.emit6d_range = [0.0, 6.00001]
+        #plotter.z_range = [50*1e3, 100*1e3] #[10*1e3-0.1, 65*1e3+0.1]#[50*1e3, 150*1e3] #
+        plotter.z_range = [None, None]
+        plotter.emit_range = [0.0, 3.00001]
+        plotter.emit6d_range = [0.0, 8.00001]
         plotter.max_station = 1000 # max station for phase space plots
         plotter.station_stroke = 1 # stroke station for phase space plots
         plotter.frequency = frequency

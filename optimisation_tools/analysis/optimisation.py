@@ -59,6 +59,7 @@ class Optimisation:
         a_type = optimiser_config["type"]
         optimiser = optimiser_types[a_type]()
         optimiser.setup(optimiser_config)
+        optimiser.optimser_config = optimiser_config
         return optimiser
 
 

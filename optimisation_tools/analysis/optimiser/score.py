@@ -156,6 +156,7 @@ class PSVScore(Score):
         # dependent; e stands for "ephemeral"
         self.e_input_psv = {}
         self.e_ref_psv = {}
+        self.e_r = {}
         self.score = -1e9
         self.verbose = False
 
@@ -175,8 +176,8 @@ class PSVScore(Score):
         for i, hit in enumerate(hit_list):
             if hit["station"] == self.station:
                 self.print_hit(hit)
-                self.r = dict([(var, hit[var] - self.e_ref_psv[var]) for var in self.e_ref_psv.keys()])
-                self.score = sum([(self.r[var]/self.tolerance[var])**2 for var in self.e_ref_psv.keys() if self.tolerance[var]])
+                self.e_r = dict([(var, hit[var]) for var in self.e_ref_psv.keys()])
+                self.score = sum([((self.e_r[var]- - self.e_ref_psv[var])/self.tolerance[var])**2 for var in self.e_ref_psv.keys() if self.tolerance[var]])
                 print("score:", self.score)
                 break
         return self.score
@@ -192,6 +193,7 @@ class PSVScore(Score):
             "score_type":"PSVScore",
             "station":self.station,
             "target":self.e_ref_psv, # e_ means it has variable substitutions done
+            "actual":self.r,
             "orbit":self.e_input_psv,
             "score":self.score
         }

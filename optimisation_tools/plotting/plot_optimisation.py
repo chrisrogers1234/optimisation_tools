@@ -6,8 +6,11 @@ import os
 import matplotlib
 import matplotlib.pyplot
 
+unique_id = 1
+
 class Plotter:
     def __init__(self):
+        global unique_id
         self.data = []
         self.delta_subs = []
         self.best_name = "best"
@@ -17,6 +20,8 @@ class Plotter:
         self.max_score = None # set to None to ignore this cut
         self.sub_cuts = {} # mapping from sub name to [lower_bound, upper_bound]; set to None to ignore a bound
         self.cut_list = []
+        self.uid = " "+str(unique_id)
+        unique_id += 1
 
     def load_one_dir_low_energy(self, a_dir):
         my_result = {}
@@ -141,7 +146,7 @@ class Plotter:
         x_list = [item["config"]["substitutions"][var_x] for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
         y_list = [self.y_lambda(item[self.y_var]) for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
         x_label =  self.x_label(var_x)
-        figure = matplotlib.pyplot.figure(x_label)
+        figure = matplotlib.pyplot.figure(x_label+self.uid)
         axes = figure.add_subplot(1, 1, 1)
         axes.scatter(x_list, y_list, s=4)
         if var_x in self.log_scaling:
@@ -153,12 +158,12 @@ class Plotter:
         figure.savefig(f"{self.plot_dir}/optimisation_{x_name}.png")
 
     def plot_two_items(self, var_x, var_y):
-        x_list = [item["config"]["substitutions"][var_x] for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
-        y_list = [item["config"]["substitutions"][var_y] for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
-        z_list = [self.y_lambda(item[self.y_var]) for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
+        x_list = [item["config"]["substitutions"][var_x] for item in self.data]
+        y_list = [item["config"]["substitutions"][var_y] for item in self.data]
+        z_list = [self.y_lambda(item[self.y_var]) for item in self.data]
         x_label =  self.x_label(var_x)
         y_label =  self.x_label(var_y)
-        figure = matplotlib.pyplot.figure(x_label+" vs "+y_label)
+        figure = matplotlib.pyplot.figure(x_label+" vs "+y_label+self.uid)
         #axes = figure.add_subplot(1, 1, 1, projection="3d")
         #axes.stem(x_list, y_list, z_list, bottom=max(z_list))#, cmap="viridis", s=4)
         #axes.set_zlabel(self.y_label)
@@ -178,7 +183,6 @@ class Plotter:
         figure.colorbar(scat)
         figure.savefig(f"{self.plot_dir}/optimisation_{x_name}_{y_name}.png")
 
-
     def get_path_root(self):
         path_list = [item['config']['run_dir'] for item in self.data]
         path_root = os.path.commonpath(path_list)
@@ -192,9 +196,9 @@ class Plotter:
             return var_x.replace("__", "").replace("_", " ")
 
     def print_best(self):
-        print(f"Found best with score {self.data[0]['score']}")
+        print(f"Found best with {self.y_var}\t{self.data[0][self.y_var]}  ")
         for key in self.delta_subs:
-            print(f"{self.x_label(key):65s} {key:30s} {self.data[0]['config']['substitutions'][key]}")
+            print(f"{self.x_label(key):65s}\t{key:30s}\t{self.data[0]['config']['substitutions'][key]}")
         run_dir = self.data[0]['config']['run_dir']
         run_dir = os.path.realpath(run_dir)
         best_name = f"{self.get_path_root()}/{self.best_name}"
@@ -204,7 +208,6 @@ class Plotter:
             os.unlink(best_name)
         print()
         os.symlink(run_dir, best_name)
-
 
     labels = {
         "__dt1__":"Reacceleration pulse start time [ns]",
@@ -219,39 +222,17 @@ class Plotter:
         "__pd__":"Paschen distance used in Paschen voltage calculation [mm]",
         "__n_events__":"Number of initial events",
         "__full_length__":"Cooling cell length [mm]",
+        "__rf_efield__":"RF Peak Field [MV/m]",
+        "__wedge_thickness__":"Wedge thickness on-axis [mm]",
+        "__wedge_angle__":"Wedge opening angle [$^\\circ$]",
+        "__dipole_field__":"Bending field [T]",
     }
     log_scaling = [
         "__density_factor__",
         "__ez2__",
     ]
 
-def low_energy_muons(plotter):
-    plotter.plot_dir = "output/v055/"
-    plotter.y_label = "Transmission [%]"
-    plotter.y_lambda = lambda y: (1-y)*100
-    plotter.load_one_dir = plotter.load_one_dir_low_energy
-    plotter.load_files(["output/v055/*"])
-
-def cooling(plotter):
-    run_dir = "output/v069/"
-    plotter.y_var = "fom_sum" # fom_sum or fom_product
-    if plotter.y_var == "fom_sum":
-        plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}} + "+\
-                           "\\frac{\\varepsilon_{l}^{ds}}{\\varepsilon_{l}^{us}} + \\frac{1}{T_{trans}^2}$"
-        plotter.vmin, plotter.vmax = [2.5, 3.25]
-        plotter.max_score = 5.0
-    elif plotter.y_var == "fom_product":
-        plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}}\\,\\frac{\\varepsilon_{l}^{ds}}{\\varepsilon_{l}^{us}}\\,\\frac{1}{T_{trans}^2}$"
-        plotter.vmin, plotter.vmax = [0.5, 1.5]
-        plotter.max_score = 1.5
-    else:
-        raise RuntimeError("Did not recognise y_var")
-    plotter.best_name = f"{plotter.y_var}_{plotter.best_name}"
-    plotter.plot_dir = f"{run_dir}/{plotter.y_var}_optimisation_plot/"
-    plotter.sub_cuts = {}
-    plotter.y_lambda = lambda y: y
-    plotter.load_one_dir = plotter.load_one_dir_cooling
-    plotter.load_files(f"{run_dir}/name*")
+    class_unique_id = 0
 
 def cleanup(plotter, files_to_clean):
     root_dir = plotter.get_path_root()
@@ -278,10 +259,41 @@ def cleanup(plotter, files_to_clean):
                     print(f"       {a_target.replace(a_dir, '')}")
                 os.unlink(a_target)
 
+def low_energy_muons(plotter):
+    plotter.plot_dir = "output/v055/"
+    plotter.y_label = "Transmission [%]"
+    plotter.y_lambda = lambda y: (1-y)*100
+    plotter.load_one_dir = plotter.load_one_dir_low_energy
+    plotter.load_files(["output/v055/*"])
+
+def cooling(plotter, y_var):
+    run_dir = "output/v067/"
+    plotter.y_var = y_var
+    if plotter.y_var == "fom_sum":
+        plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}} + "+\
+                           "\\frac{\\varepsilon_{l}^{ds}}{\\varepsilon_{l}^{us}} + \\frac{1}{T_{trans}^2}$"
+        plotter.vmin, plotter.vmax = [2.5, 3.25]
+        plotter.max_score = 5.0
+    elif plotter.y_var == "fom_product":
+        plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}}\\,\\frac{\\varepsilon_{l}^{ds}}{\\varepsilon_{l}^{us}}\\,\\frac{1}{T_{trans}^2}$"
+        plotter.vmin, plotter.vmax = [0.5, 1.5]
+        plotter.max_score = 1.5
+    else:
+        raise RuntimeError("Did not recognise y_var")
+    plotter.best_name = f"{plotter.y_var}_{plotter.best_name}"
+    plotter.plot_dir = f"{run_dir}/{plotter.y_var}_optimisation_plot/"
+    plotter.sub_cuts = {}
+    plotter.y_lambda = lambda y: y
+    plotter.load_one_dir = plotter.load_one_dir_cooling
+    plotter.load_files(f"{run_dir}/name*")
+
 def main():
     plotter = Plotter()
     #low_energy_muons(plotter)
-    cooling(plotter)
+    cooling(plotter, "fom_sum")
+    plotter.do_plots()
+    plotter = Plotter()
+    cooling(plotter, "fom_product")
     plotter.do_plots()
     if "--cleanup" in sys.argv:
         cleandir = "tmp/optimisation/*/"
@@ -291,9 +303,3 @@ if __name__ == "__main__":
     main()
     matplotlib.pyplot.show(block=False)
     input("Press <CR> to finish")
-
-"""
-lrwxrwxrwx   1 cr67 cr67  216 Aug 26 14:03 best -> /mnt/7cc64665-84f7-47bb-9085-dff72d2de173/data/work/2020-07-06_mc/cooling-channel/output/v068/name=cooling;_by=0.1371;_dt=29.31;_dtheta=17.36;_efield=30;_gap=1000;_iris_factor=0.4908;_pz=200;_roll=270;_window_dt=0.15
-lrwxrwxrwx   1 cr67 cr67  216 Aug 26 14:04 fom_product_best -> /mnt/7cc64665-84f7-47bb-9085-dff72d2de173/data/work/2020-07-06_mc/cooling-channel/output/v068/name=cooling;_by=0.1371;_dt=29.31;_dtheta=17.36;_efield=30;_gap=1000;_iris_factor=0.4908;_pz=200;_roll=270;_window_dt=0.15
-lrwxrwxrwx   1 cr67 cr67  216 Aug 26 14:42 fom_sum_best -> /mnt/7cc64665-84f7-47bb-9085-dff72d2de173/data/work/2020-07-06_mc/cooling-channel/output/v068/name=cooling;_by=0.1478;_dt=25.87;_dtheta=14.38;_efield=30;_gap=1000;_iris_factor=0.4908;_pz=200;_roll=270;_window_dt=0.15
-"""
