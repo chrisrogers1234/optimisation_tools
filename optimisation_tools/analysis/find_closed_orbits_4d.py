@@ -6,11 +6,8 @@ import os
 import shutil
 import time
 import ctypes
+import scipy.optimize
 
-try:
-    import ROOT
-except ModuleNotFoundError:
-    print("find_closed_orbits_4d won't work - ROOT not found")
 import numpy
 numpy.seterr('warn')
 numpy.set_printoptions(linewidth=200)
@@ -44,7 +41,7 @@ class ClosedOrbitFinder4D(object):
         self.output_list = []
         self.print_list = []
         self.py_opal_setup = False
-        self.minuit_score_list = []
+        self.scipy_score_list = []
         self.get_tracking(True)
         print("Closed Orbit Finder 4D with energy", self.energy)
 
@@ -389,18 +386,18 @@ class ClosedOrbitFinder4D(object):
                     output["seed_hit"] = self.seed_to_hit(output["seed"], 0.).dict_from_hit()
                 except Exception:
                     sys.excepthook(*sys.exc_info())
-                if self.config_co["do_minuit"]:
-                    print("DOING MINUIT WITH seed", output["seed"])
-                    minuit_out = self.find_co_minuit(output["seed"])
-                    output["seed"] = minuit_out
+                if self.config_co["do_scipy"]:
+                    print("DOING scipy WITH seed", output["seed"])
+                    scipy_out = self.find_co_scipy(output["seed"])
+                    output["seed"] = scipy_out
                     output["seed_hit"] = self.seed_to_hit(output["seed"], 0.).dict_from_hit()
                     try:
-                        print("DOING post seed with ", minuit_out)
-                        output = self.tm_co_fitter(minuit_out, 1)
-                        output["seed_hit"] = self.seed_to_hit(minuit_out, 0.).dict_from_hit()
+                        print("DOING post seed with ", scipy_out)
+                        output = self.tm_co_fitter(scipy_out, 1)
+                        output["seed_hit"] = self.seed_to_hit(scipy_out, 0.).dict_from_hit()
                     except Exception:
                         print("\n*****************")
-                        print("Attempting to find the tune after minuit... raised an exception; lattice may be unstable.")
+                        print("Attempting to find the tune after scipy... raised an exception; lattice may be unstable.")
                         print("*****************\n")
                         sys.excepthook(*sys.exc_info())
                 try:
@@ -436,90 +433,101 @@ class ClosedOrbitFinder4D(object):
             output = output_dir+"/"+self.config_co["output_file"]
             os.rename(tmp, output)
 
-    def find_co_minuit(self, seed):
-        print("Running minuit", seed)
-        seed_hit = self.seed_to_hit(seed, 0)
-        force = self.config_co["fixed_variables"]
-        n_iterations = self.config_co["minuit_iterations"]
-        target_score = self.config_co["minuit_tolerance"]
-        self.opt_errs = self.config_co["minuit_weighting"]
+############################################## ============ ################################################
+    def get_simplex(self, seed):
         deltas = self.config_co["deltas"]
+        fixed = [var in self.config_co["fixed_variables"] for var in self.config_co["vars"]]
+        deltas = [deltas[i] for i, v in enumerate(self.config_co["vars"]) if not fixed[i]]
+        x0 = [[x for i, x in enumerate(seed) if not fixed[i]]]
+        x0 += [copy.deepcopy(x0[0]) for d in deltas]
+        for i, d in enumerate(deltas):
+            x0[i+1][i] += d
+        return x0
+
+    def find_co_scipy(self, seed):
+        print("Running optimiser with", seed)
+        simplex = self.get_simplex(seed)
+        print("     using simplex", simplex)
+        options = {
+            "maxiter":self.config_co["scipy_iterations"],
+            "initial_simplex":simplex,
+        }
+        target_score = self.config_co["scipy_tolerance"]
+        self.opt_errs = self.config_co["scipy_weighting"]
         self.iteration_number = 1
-        self.minuit = ROOT.TMinuit(len(self.var_list))
-        self.minuit_stations = [self.config_co["us_cell"], self.config_co["ds_cell"]]
-        for i, var in enumerate(self.var_list):
-            if var in force:
-                seed_hit[var] = force[var]
-            self.minuit.DefineParameter(i, var, seed_hit[var], deltas[i], 0, 0)
-            if var in force:
-                self.minuit.FixParameter(i)
+        self.scipy_stations = [self.config_co["us_cell"], self.config_co["ds_cell"]]
 
-        global CO_FINDER
-        CO_FINDER = self
-        self.minuit.SetFCN(minuit_function)
         try:
-            self.minuit.Command("SIMPLEX "+str(n_iterations)+" "+str(target_score))
+            scipy.optimize.minimize(
+                fun=self.function,
+                x0=simplex[0],
+                #bounds=bound_list,
+                tol=target_score,
+                options=options,
+                method="nelder-mead",
+            )
         except StopIteration:
-            sys.excepthook(*sys.exc_info())
-            print(f"Terminated after {self.iteration_number}/{n_iterations} iterations")
-        finally:
-            print(f"Terminated after {self.iteration_number}/{n_iterations} iterations")
-        return self.get_minuit_hit()
+            print("scipy finishes without convergence")
+        return self.get_scipy_hit()
 
-    def get_minuit_hit(self):
-        seed = [None]*4
-        for i, var in enumerate(self.var_list):
-            x = ctypes.c_double()
-            err = ctypes.c_double()
-            self.minuit.GetParameter(i, x, err)
-            seed[i]  = float(x.value)
-            x = None
-            err = None
-        hit = self.seed_to_hit(seed, 0)
-        return seed
+    def x0_to_seed(self, x0):
+        """Add in fixed variables to the seed."""
+        seed_in = []
+        seed_index = 0
+        for i, var in enumerate(self.config_co["vars"]):
+            if var in self.config_co["fixed_variables"]:
+                seed_in.append(self.config_co["fixed_variables"][var])
+            else:
+                seed_in.append(x0[seed_index])
+                seed_index += 1
+        return seed_in
 
-
-    def minuit_function(self, nvar, parameters, score, jacobian, err):
-        seed_in = self.get_minuit_hit()
+    def function(self, seed_in):
         os.chdir(self.source_dir)
-        hit_list = self.track_many([seed_in]*3, 0.0, False)[1]
+        x_in = self.x0_to_seed(seed_in)
+        hit_list = self.track_many([x_in]*3, 0.0, False)[1]
         print("Iteration", self.iteration_number, "with seed", seed_in)
         for i, hit in enumerate(hit_list):
             print(format(i, "4d"), end="")
-            if i in self.minuit_stations:
+            if i in self.scipy_stations:
                 print("*", end=" ")
             else:
                 print(" ", end=" ")
             for var in self.var_list:
                 print(var.ljust(4), format(hit[var], "14.10g"), end=" ")
             print()
-        score.value = 0.0
-        print("Scores")
+        print("  Scores: ", end="")
+        score = 0.0
         for var in self.var_list:
             try:
-                value_list = [hit_list[i][var] for i in self.minuit_stations]
+                value_list = [hit_list[i][var] for i in self.scipy_stations]
             except IndexError:
                 if self.iteration_number == 0:
                     print("Seed did not work")
                     raise
                 else:
-                    score.value = max(self.minuit_score_list)*10
+                    score.value = max(self.scipy_score_list)*10
                 value_list = [1e9, 1e9, 1e9, 1e9]
             delta = numpy.std(value_list)
-            score.value += delta/self.opt_errs[var]
-            print(var.ljust(4), format(delta, "14.10g"), end=" ")
-        print("Total", score.value)
-        self.minuit_score_list.append(score.value)
+            score += delta/self.opt_errs[var]
+            print(f"std({var})", value_list, format(delta, "14.10g"), end="; ")
+        print("\nTotal", score)
+        self.scipy_score_list.append((score, seed_in))
         self.iteration_number += 1
-        if self.iteration_number > self.config_co["minuit_iterations"]:
+        if self.iteration_number > self.config_co["scipy_iterations"]:
             raise StopIteration("Max iterations exceeded")
+        return score
+
+    def get_scipy_hit(self):
+        self.scipy_score_list = sorted(self.scipy_score_list, key=lambda x: x[0])
+        print("Best score", self.scipy_score_list[-1][0])
+        xout = self.scipy_score_list[-1][1]
+        seed_out = self.x0_to_seed(xout)
+        return seed_out
 
     run_index = 1
 
-global CO_FINDER
-def minuit_function(nvar, parameters, score, jacobian, err):
-    global CO_FINDER
-    CO_FINDER.minuit_function(nvar, parameters, score, jacobian, err)
+
 
 def main(config):
     co_finder = ClosedOrbitFinder4D(config)
