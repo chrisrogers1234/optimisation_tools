@@ -36,9 +36,10 @@ class PlotG4BL(object):
     def load_data(self, run_dir_glob, co_file, reference_file, reference_file_format):
         for a_dir in sorted(glob.glob(run_dir_glob)):
             new_co_data = []
-            reference_data_glob = sorted(glob.glob(os.path.join(a_dir, reference_file)))
+            glob_target = os.path.join(a_dir, reference_file)
+            reference_data_glob = sorted(glob.glob(glob_target))
             if len(reference_data_glob) == 0:
-                print("Failed to find files from dir ", a_dir)
+                print("Failed to find files from glob ", glob_target)
             for i, file_name in enumerate(reference_data_glob):
                 new_co_data.append({"bunch_list":Bunch.new_list_from_read_builtin(reference_file_format, file_name)})
                 print("   ... found ", len(new_co_data[-1]["bunch_list"][-1]), "in final bunch")
@@ -424,7 +425,6 @@ def do_plot(run_dir, args):
     title = title.split("/")[-1]
     plot_dir = fname(run_dir+"/plot_amplitude_", args, True)
     file_name = "track_beam_amplitude/da_scan//output*.txt"
-    file_name = "tmp/optimisation/output*.txt"
     co_file_name = "closed_orbits_cache"
     cell_length = 2000.0 # full cell length
     if "cell_length" in args:
@@ -447,18 +447,12 @@ def main():
     """
     Plot DA calculation following track beam call
     """
-    run_dir = "output/demo_apr25_v061/"
+    run_dir = "output/v086/"
     try:
         args = [
-            ("by", "0.2"),
-            ("dt", "*"),
-            ("dtheta", "*"),
-            ("efield", "*"),
-            ("gap", "*"),
-            ("iris_factor", "*"),
+            ("name", "cooling"),
+            ("by", "*"),
             ("pz", "*"),
-            ("roll", "270"),
-            ("window_dt", "*"),
         ]
         do_plot(run_dir, args)
     except Exception:

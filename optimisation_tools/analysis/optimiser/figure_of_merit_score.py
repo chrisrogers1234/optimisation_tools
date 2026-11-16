@@ -17,33 +17,38 @@ import xboa.bunch
 import optimisation_tools.analysis.optimiser.score
 
 class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
-    def __init__(self, beam_file, station, n_particles, pz, transverse_emittance, longitudinal_emittance, do_scan, a_pz_coefficient):
-        self.beam_file = beam_file
-        self.station = station
+    def __init__(self): #, config):
+        self.beam_file = None
+        self.station = 5
         self.file_format = "icool_for009"
-        self.p_mean = pz
+        self.score_algorithm = "sum_score"
+        self.pz = 200
         self.eps_cut_long = 1000
-        self.n_particles = n_particles
+        self.n_particles = 1000
         self.eps_cut_trans = 1000
         if self.n_particles % 2 == 0:
             self.n_particles += 1
-        self.emittance_trans = transverse_emittance
+        self.emittance_trans = 2.0
         self.frequency = 0.704 # GHz
-        self.emittance_long = longitudinal_emittance
+        self.emittance_long = 2.0
         self.dispersion_dp = 2.0 # MeV/c
+        self.station_us = 4
+        self.station_ds = 19
         self.mass = xboa.common.pdg_pid_to_mass[13]
         self.variables = ["x", "px", "y", "py", "t", "energy"]
-        self.do_scan = do_scan
+        self.do_scan = False
         self.bunch = None
-        self.a_pz_coefficient = a_pz_coefficient
+        self.a_pz_coefficient = 0.9
         self.beam_x_p_plus = None
         self.beam_y_p_plus = None
         self.beam_x_p_minus = None
         self.beam_y_p_minus = None
         self.cov_trans = None # target cov matrix
-        self.station_us = 4
-        self.station_ds = 19
         self.output = {}
+        self.type = "figure_of_merit"
+
+    def setup(self, config):
+        super(FigureOfMeritScore, self).setup(config)
 
     def apply_cuts(self):
         self.bunch.cut({"pid":-13}, operator.ne)
@@ -65,7 +70,7 @@ class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
 
     def get_grid_long(self):
         n = self.n_particles
-        mean_e = (self.p_mean**2+xboa.common.pdg_pid_to_mass[13]**2)**0.5
+        mean_e = (self.pz**2+xboa.common.pdg_pid_to_mass[13]**2)**0.5
         longitudinal = [[0.0+(i-(n-1)/2)/self.frequency/(n-1), mean_e] for i in range(n)]
         return longitudinal
 
@@ -75,7 +80,7 @@ class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
         print(f"Input mean:\n{mean_long}\ncov:\n{cov_long}")
         cov_long /= numpy.linalg.det(cov_long)**0.5 # determinant is 1
         cov_long *= self.emittance_long*self.mass/xboa.common.constants["c_light"]
-        e_mean = (self.p_mean**2+self.mass**2)**0.5
+        e_mean = (self.pz**2+self.mass**2)**0.5
         psv_list = numpy.random.multivariate_normal([0, e_mean], cov_long, self.n_particles)
         mean_long, cov_long = xboa.common.fit_ellipse(psv_list, self.eps_cut_long)
         print(f"Output mean:\n{mean_long}\noutput cov:\n{cov_long}")
@@ -86,7 +91,7 @@ class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
         disp_y = (self.beam_y_p_plus-self.beam_y_p_minus)/self.dispersion_dp
         print(f"Applying dispersion term using [dx, dy] = dpz * [{disp_x}, {disp_y}]")
         for i, psv in enumerate(psv_all):
-            dpz = (psv[5]**2-(psv[1]**2+psv[3]**2+self.mass**2))**0.5-self.p_mean
+            dpz = (psv[5]**2-(psv[1]**2+psv[3]**2+self.mass**2))**0.5-self.pz
             dx = dpz * disp_x
             dy = dpz * disp_y
             psv[0] += dx
@@ -125,7 +130,7 @@ class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
         print([bunch[0]["station"] for bunch in bunch_list])
         self.bunch = [bunch for bunch in bunch_list if bunch[0]["station"] == self.station][0]
         self.apply_cuts() # just a pid cut for now
-        print("Got bunch for station", self.station, "with", self.bunch.bunch_weight(), "good hits")
+        print("Got bunch for station", self.station, "at z", self.bunch[0]["z"], "with", self.bunch.bunch_weight(), "good hits")
         psv_transverse_list = self.get_psv_trans()
         if self.do_scan:
             psv_long_list = self.get_grid_long()
@@ -171,6 +176,15 @@ class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
         return score
 
     def get_score(self, hit_list_of_lists):
+        if self.score_algorithm == "sum_score":
+            self.sum_score(hit_list_of_lists)
+        elif self.score_algorithm == "constant":
+            self.constant_score(hit_list_of_lists)
+        else:
+            raise ValueError(f"Unknown score algorithm {self.score_algorithm}")
+        return self.output["total_score"]
+
+    def sum_score(self, hit_list_of_lists):
         # Score is sum upstream emittance ratios + transmission ratio. Note that we
         # cannot do a transmission cut in the experiment so we won't do it in
         # analysis
@@ -191,6 +205,26 @@ class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
         }
         return score
 
+    def constant_score(self, hit_list_of_lists):
+        score_us = self.get_calc(self.station_us, hit_list_of_lists)
+        score_ds = self.get_calc(self.station_ds, hit_list_of_lists)
+
+        emit_long = score_ds["emit_long"]/score_us["emit_long"]
+        #score = emit_trans*emit_long/transmission/transmission
+        score = ((score_ds["weight"]-score_us["weight"])**2/score_ds["weight"]**2+
+                 (score_ds["emit_perp"]-score_us["emit_perp"])**2+
+                 (score_ds["emit_long"]-score_us["emit_long"])**2)**0.5
+        print("FigureOfMeritScore got score:", score)
+        # note low score is better - we are trying to minimise after all
+        self.output = {
+            "score_type":"CovScore",
+            "us":score_us,
+            "ds":score_ds,
+            "total_score":score
+        }
+        return score
+
+
     def post_output(self): # optionally, we post output from the score function
         return {}
 
@@ -203,3 +237,5 @@ class FigureOfMeritScore(optimisation_tools.analysis.optimiser.score.Score):
         print("Got score", self.get_score(hit_list_of_lists))
         print(self.store_data())
         return self.store_data()
+
+optimisation_tools.analysis.optimiser.score.Score.score_types["figure_of_merit"] = FigureOfMeritScore

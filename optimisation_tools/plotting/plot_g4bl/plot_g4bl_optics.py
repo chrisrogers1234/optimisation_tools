@@ -604,23 +604,17 @@ def fname(prefix, params, ignore_globs):
 
 
 def main():
-    run_dir = "output/v061/"
+    run_dir = "output/v086/"
     params = [
-            ("by", "0.2"),
-            ("dt", "*"),
-            ("dtheta", "*"),
-            ("efield", "*"),
-            ("gap", "*"),
-            ("iris_factor", "*"),
-            ("pz", "*"),
-            ("roll", "270"),
-            ("window_dt", "*"),
+        ("by", "*"),
+        ("pz", "*"),
+        ("roll", "*"),
     ]
 
     run_dir_glob = fname(f"{run_dir}/name=cooling;_", params, False)
     plot_dir = fname(f"{run_dir}/plot_optics_", params, True)
     print("plotting into", plot_dir)
-    target_pz = [{"__momentum__":mom} for mom in [0.022, 0.025, 0.028]]
+    target_pz = [{"__momentum__":mom} for mom in [0.19, 0.20, 0.21]]
 
     file_name = "tmp/find_closed_orbits/output_1.txt"
     co_file_name = "closed_orbits_cache"
@@ -628,7 +622,7 @@ def main():
         cell_length = float(dict(params)["cell_length"]) # full cell length
         h0 = 0.0 #float(dict(params)["harmonic_0"])
     else:
-        cell_length = 500
+        cell_length = 2000
         h0 = 0
     file_format = "icool_for009"
     #file_format = "bdsim_root_file"

@@ -520,8 +520,8 @@ class ClosedOrbitFinder4D(object):
 
     def get_scipy_hit(self):
         self.scipy_score_list = sorted(self.scipy_score_list, key=lambda x: x[0])
-        print("Best score", self.scipy_score_list[-1][0])
-        xout = self.scipy_score_list[-1][1]
+        print("Best score", self.scipy_score_list[0][0])
+        xout = self.scipy_score_list[0][1]
         seed_out = self.x0_to_seed(xout)
         return seed_out
 

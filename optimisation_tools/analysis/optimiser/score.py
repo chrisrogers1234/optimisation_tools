@@ -157,12 +157,14 @@ class PSVScore(Score):
         self.e_input_psv = {}
         self.e_ref_psv = {}
         self.e_r = {}
+        self.e_print = {}
         self.score = -1e9
         self.verbose = False
 
     def print_hit(self, hit):
         for var in self.print_variables:
             print(f"{var} {hit[var]:10.4g}", end=" ")
+            self.e_print[var] = hit[var]
 
     def receive_output(self, parameter_list):
         self.e_input_psv = Score.reconcile_dict(parameter_list, self.input_psv)
@@ -177,7 +179,7 @@ class PSVScore(Score):
             if hit["station"] == self.station:
                 self.print_hit(hit)
                 self.e_r = dict([(var, hit[var]) for var in self.e_ref_psv.keys()])
-                self.score = sum([((self.e_r[var]- - self.e_ref_psv[var])/self.tolerance[var])**2 for var in self.e_ref_psv.keys() if self.tolerance[var]])
+                self.score = sum([((self.e_r[var] - self.e_ref_psv[var])/self.tolerance[var])**2 for var in self.e_ref_psv.keys() if self.tolerance[var]])
                 print("score:", self.score)
                 break
         return self.score
@@ -193,7 +195,7 @@ class PSVScore(Score):
             "score_type":"PSVScore",
             "station":self.station,
             "target":self.e_ref_psv, # e_ means it has variable substitutions done
-            "actual":self.r,
+            "actual":self.e_print,
             "orbit":self.e_input_psv,
             "score":self.score
         }

@@ -76,6 +76,6 @@ class OptimiserBase:
             "parameter_list":[par.store_data() for par in self.parameter_list],
             "score":self.score.store_data(),
             "score_result":self.score_result,
-            "config":optimiser_config
+            "config":self.optimiser_config
         }
         return summary

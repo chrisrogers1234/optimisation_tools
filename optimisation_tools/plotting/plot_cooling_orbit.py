@@ -18,9 +18,9 @@ class PlotOrbit:
         self.p_pattern = "*.$p_*"
         self.x_orbit_pattern = "*.$beam_x_*"
         self.y_orbit_pattern = "*.$beam_y_*"
-        self.x_trajectory_pattern = "*.optimisation.Closed orbit on momentum 190.score.sum_square_score_list(*)"
+        self.x_trajectory_pattern = "*.optimisation.Closed orbit on momentum 190 *.score.sum_square_score_list(*)"
         self.tm_pattern = "*.$tm_*"
-        self.score_pattern = "*.optimisation.Closed orbit on momentum *.score_result"
+        self.score_pattern = "*.optimisation.Closed orbit on momentum * 1.score_result"
         self.score_max = 10.0
         self.data = {}
         self.plot_dir = ""
@@ -60,6 +60,7 @@ class PlotOrbit:
                 self.nu2[-1] = dm.get_phase_advance(1)/math.pi/2.0
             except Exception:
                 sys.excepthook(*sys.exc_info())
+            return
             print(tm,"\n")
             print(tm_s, "\n")
             print(DTM.simplecticity(tm), "\n")
@@ -91,7 +92,7 @@ class PlotOrbit:
 
     def plots(self):
         self.plot_orbit()
-        self.plot_tm()
+        #self.plot_tm()
 
     def plot_orbit(self):
 
@@ -132,13 +133,13 @@ class PlotOrbit:
 def main():
     #Test().test_search_json()
     plotter = PlotOrbit()
-    plotter.filename_glob = "output/v075/name=cooling;_gap=1000;_pz=200;_rf_gap_phase_delta=0;_rf_gap_scale=1/optimisation_closed_orbit"
+    plotter.filename_glob = "output/v076/name=cooling;_gap=1000;_pz=200;_rf_gap_phase_delta=0;_rf_gap_scale=1/optimisation_closed_orbit"
     plotter.x_label = "p [MeV/c]"
     plotter.y_label = "y [mm]"
     plotter.load_data()
-    values, paths = optimisation_tools.utils.search_json.search_json(plotter.data, plotter.x_trajectory_pattern)
-    print(values)
-    print(json.dumps(paths, indent=2))
+    values, paths = optimisation_tools.utils.search_json.search_json(plotter.data, plotter.x_orbit_pattern)
+    #print(values)
+    #print(json.dumps(paths, indent=2))
     plotter.plots()
 
 

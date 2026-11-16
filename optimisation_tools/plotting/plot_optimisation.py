@@ -12,6 +12,7 @@ class Plotter:
     def __init__(self):
         global unique_id
         self.data = []
+        self.exclude_x_var = [] # explicitly block delta_subs from using these
         self.delta_subs = []
         self.best_name = "best"
         self.y_var = "fom_1"
@@ -46,27 +47,34 @@ class Plotter:
         my_result = {}
         score_json = None
         try:
-            print(a_dir)
             with open(f"{a_dir}/optimisation") as fin:
                 score_json = json.load(fin)
                 cooling_score = score_json["optimisation"]["cooling a-pz"]["score"]
-                et_us = my_result["score"] = cooling_score["us"]["emit_perp"]
-                el_us = my_result["score"] = cooling_score["us"]["emit_long"]
-                wt_us = my_result["score"] = cooling_score["us"]["weight"]
+                if "sum_square_score_list" in cooling_score.keys():
+                    cooling_score = cooling_score["sum_square_score_list"][0]
+                et_us = cooling_score["us"]["emit_perp"]
+                el_us = cooling_score["us"]["emit_long"]
+                wt_us = cooling_score["us"]["weight"]
 
-                et_ds = my_result["score"] = cooling_score["ds"]["emit_perp"]
-                el_ds = my_result["score"] = cooling_score["ds"]["emit_long"]
-                wt_ds = my_result["score"] = cooling_score["ds"]["weight"]
+                et_ds = cooling_score["ds"]["emit_perp"]
+                el_ds = cooling_score["ds"]["emit_long"]
+                wt_ds = cooling_score["ds"]["weight"]
                 if wt_us < 200:
                     return None
 
                 my_result["score"] = cooling_score["total_score"]
                 my_result["fom_product"] = et_ds/et_us*el_ds/el_us*(wt_us/wt_ds)**2
                 my_result["fom_sum"] = et_ds/et_us+el_ds/el_us+(wt_us/wt_ds)**2
-        except (FileNotFoundError, KeyError):
-            if score_json:
-                print(score_json["optimisation"].keys())
-            sys.excepthook(*sys.exc_info())
+                my_result["fom_constant"] = ((et_ds-et_us)**2+(el_ds-el_us)**2+(wt_us-wt_ds)**2/wt_ds**2)**0.5
+                my_result["emit_long"] = (el_ds/el_us)
+                my_result["emit_perp"] = (et_ds/et_us)
+                my_result["transmission"] = (wt_ds/wt_us)
+                my_result["cooling_score"] = cooling_score
+        except FileNotFoundError:
+            print(f"FileNotFound (e.g. */optimisation missing) while loading {a_dir}")
+            return None
+        except KeyError:
+            print(f"KeyError (e.g. 'cooling' not in optimisation) while loading {a_dir}")
             return None
         with open(f"{a_dir}/subs_list.json") as fin:
             my_result["config"] = {"substitutions":json.load(fin)[0]}
@@ -115,12 +123,13 @@ class Plotter:
                 if fail_counter < 3:
                     sys.excepthook(*sys.exc_info())
                 elif fail_counter == 3:
-
                     print(">>>>>>>>>>>>>>>>>> Detected more than 3 fails, no bother printo <<<<<<<<<<<<<<<<<<<<")
         self.data = sorted(self.data, key=lambda item: item[self.y_var])
         self.get_deltas()
-        print("Loaded", len(self.data), "with", fail_counter, "fails", cut_counter, "cuts and subs:")
-        print(self.delta_subs)
+        print("Loaded", len(self.data), "files with", fail_counter, "fails", cut_counter, "cuts and subs:")
+        print("x variables:", self.delta_subs)
+        if self.exclude_x_var:
+            print("Note that I am excluding:", self.exclude_x_var)
 
     def get_deltas(self):
         delta_subs = set()
@@ -128,8 +137,9 @@ class Plotter:
         for item in self.data:
             subs = item["config"]["substitutions"]
             for key, value in subs.items():
-                if ref_subs[key] != value:
+                if ref_subs[key] != value and key not in self.exclude_x_var:
                     delta_subs.add(key)
+
         self.delta_subs = sorted(list(delta_subs))
 
     def do_plots(self):
@@ -140,7 +150,11 @@ class Plotter:
             self.plot_one_item(var_x)
             for var_y in self.delta_subs[i+1:]:
                 self.plot_two_items(var_x, var_y)
-        self.print_best()
+        if self.three_lambdas:
+            self.plot_three_lambdas(*self.three_lambdas)
+            for var_x in self.delta_subs:
+                self.plot_lambdas_vs_parameter(self.three_lambdas, var_x)
+            self.print_best()
 
     def plot_one_item(self, var_x):
         x_list = [item["config"]["substitutions"][var_x] for item in self.data]# if item["config"]["substitutions"]["__density_factor__"] < 1e-2]
@@ -183,6 +197,34 @@ class Plotter:
         figure.colorbar(scat)
         figure.savefig(f"{self.plot_dir}/optimisation_{x_name}_{y_name}.png")
 
+    def plot_three_lambdas(self, x_lambda, y_lambda, z_lambda):
+        x_list = [x_lambda(item) for item in self.data]
+        y_list = [y_lambda(item) for item in self.data]
+        z_list = [z_lambda(item) for item in self.data]
+        figure = matplotlib.pyplot.figure(f"three_lambdas_{self.uid}")
+        axes = figure.add_subplot(1, 1, 1)
+        scat = axes.scatter(x_list, y_list, c=z_list, cmap="viridis", s=4)
+        best = axes.scatter([x_list[0]], [y_list[0]], s=40, marker="s", edgecolor="black", color="none") # square
+        axes.set_xlabel(self.three_labels[0])
+        axes.set_ylabel(self.three_labels[1])
+        axes.text(1.25, 0.5, self.three_labels[2], rotation=90, transform=axes.transAxes)
+        best = f"Best had {self.three_labels[0]} {x_list[0]:6.2g};  {self.three_labels[1]} {y_list[0]:6.2g};  {self.three_labels[2]} {z_list[0]:6.2g}"
+        axes.text(0.01, 0.93, best, transform=axes.transAxes)
+        figure.colorbar(scat)
+        figure.savefig(f"{self.plot_dir}/optimisation_three_lambdas.png")
+
+    def plot_lambdas_vs_parameter(self, lambdas_list, parameter):
+        x_lists = [[item["config"]["substitutions"][parameter] for item in self.data] for l in lambdas_list]
+        y_lists = [[l(item) for item in self.data] for l in lambdas_list]
+        figure = matplotlib.pyplot.figure(f"three_lambdas_{self.uid}_{parameter}")
+        axes = figure.add_subplot(1, 1, 1)
+        for i in range(len(lambdas_list)):
+            scat = axes.scatter(x_lists[i], y_lists[i], label=self.three_labels[i], s=4)
+        x_label =  self.x_label(parameter)
+        axes.set_xlabel(x_label)
+        axes.legend(loc="upper right")
+        figure.savefig(f"{self.plot_dir}/optimisation_three_lambdas_{parameter}.png")
+
     def get_path_root(self):
         path_list = [item['config']['run_dir'] for item in self.data]
         path_root = os.path.commonpath(path_list)
@@ -199,6 +241,11 @@ class Plotter:
         print(f"Found best with {self.y_var}\t{self.data[0][self.y_var]}  ")
         for key in self.delta_subs:
             print(f"{self.x_label(key):65s}\t{key:30s}\t{self.data[0]['config']['substitutions'][key]}")
+        for fom_key in "emit_perp", "emit_long", "weight":
+            print(f"{fom_key:<10}", end=" ")
+            for usds_key in ["us", "ds"]:
+                print(f"{self.data[0]["cooling_score"][usds_key][fom_key]:8.4g}", end=" ")
+            print()
         run_dir = self.data[0]['config']['run_dir']
         run_dir = os.path.realpath(run_dir)
         best_name = f"{self.get_path_root()}/{self.best_name}"
@@ -226,6 +273,7 @@ class Plotter:
         "__wedge_thickness__":"Wedge thickness on-axis [mm]",
         "__wedge_angle__":"Wedge opening angle [$^\\circ$]",
         "__dipole_field__":"Bending field [T]",
+        "__a_p_corr__":"Amplitude-momentum coefficient [MeV/c]",
     }
     log_scaling = [
         "__density_factor__",
@@ -252,22 +300,17 @@ def cleanup(plotter, files_to_clean):
     for i, a_dir in enumerate(dirlist):
         for a_file in files_to_clean:
             targets = glob.glob(f"{a_dir}/{a_file}")
-            if i < 10 and len(targets) > 0:
+            if i < 2 and len(targets) > 0:
                 print(f"      e.g. {a_dir}")
             for a_target in targets:
                 if i == 0:
                     print(f"       {a_target.replace(a_dir, '')}")
                 os.unlink(a_target)
 
-def low_energy_muons(plotter):
-    plotter.plot_dir = "output/v055/"
-    plotter.y_label = "Transmission [%]"
-    plotter.y_lambda = lambda y: (1-y)*100
-    plotter.load_one_dir = plotter.load_one_dir_low_energy
-    plotter.load_files(["output/v055/*"])
-
 def cooling(plotter, y_var):
-    run_dir = "output/v067/"
+    run_dir = "output/v092/"
+    load_dirs = [run_dir]
+    plotter.exclude_x_var = ["__rf_iris_factor__"]
     plotter.y_var = y_var
     if plotter.y_var == "fom_sum":
         plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}} + "+\
@@ -276,7 +319,11 @@ def cooling(plotter, y_var):
         plotter.max_score = 5.0
     elif plotter.y_var == "fom_product":
         plotter.y_label = "$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}}\\,\\frac{\\varepsilon_{l}^{ds}}{\\varepsilon_{l}^{us}}\\,\\frac{1}{T_{trans}^2}$"
-        plotter.vmin, plotter.vmax = [0.5, 1.5]
+        plotter.vmin, plotter.vmax = [0.7, 1.0]
+        plotter.max_score = 1.5
+    elif plotter.y_var == "fom_constant":
+        plotter.y_label = "Constant F.O.M."
+        plotter.vmin, plotter.vmax = [None, None]
         plotter.max_score = 1.5
     else:
         raise RuntimeError("Did not recognise y_var")
@@ -285,19 +332,26 @@ def cooling(plotter, y_var):
     plotter.sub_cuts = {}
     plotter.y_lambda = lambda y: y
     plotter.load_one_dir = plotter.load_one_dir_cooling
-    plotter.load_files(f"{run_dir}/name*")
+    for a_dir in load_dirs:
+        plotter.load_files(f"{a_dir}/name*")
+    plotter.three_lambdas = (lambda item: item["emit_perp"], lambda item: item["emit_long"], lambda item: item["transmission"])
+    plotter.three_labels = ("$\\frac{\\varepsilon_\\perp^{ds}}{\\varepsilon_\\perp^{us}}$",
+                           "$\\frac{\\varepsilon_{l}^{ds}}{\\varepsilon_{l}^{us}}$",
+                           "$Transmission$")
 
 def main():
     plotter = Plotter()
-    #low_energy_muons(plotter)
     cooling(plotter, "fom_sum")
     plotter.do_plots()
     plotter = Plotter()
     cooling(plotter, "fom_product")
     plotter.do_plots()
+    for cleandir in ["equilibrium_emittance", "closed_orbit_-dp", "closed_orbit_magnets", "closed_orbit_+dp", "rf_phase"]:
+        cleandir = f"tmp/optimisation/{cleandir}/"
+        cleanup(plotter, [cleandir+"output.txt", cleandir+"beam.tmp", cleandir+"solenoid_field_map.txt", cleandir+"dipole_field_map.txt"])
     if "--cleanup" in sys.argv:
         cleandir = "tmp/optimisation/*/"
-        cleanup(plotter, [cleandir+"output.txt", cleandir+"beam.tmp", cleandir+"solenoid_field_map.txt"])
+        cleanup(plotter, [cleandir+"output.txt", cleandir+"beam.tmp", cleandir+"solenoid_field_map.txt", cleandir+"dipole_field_map.txt"])
 
 if __name__ == "__main__":
     main()

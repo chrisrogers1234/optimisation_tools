@@ -341,8 +341,8 @@ class PlotG4BL(object):
     beta_limit = 1e4
 
 def main():
-    run_dir = "output/v054/"
-    run_dir_glob = [run_dir+f"name=cooling;_*by=0.05*"]#;_by=0.5;_dp_pos=0.08;_polarity=++++/"]
+    run_dir = "output/v086/"
+    run_dir_glob = [run_dir+f"name=cooling;_*pz=??0*"]#;_by=0.5;_dp_pos=0.08;_polarity=++++/"]
     plot_dir = run_dir+f"/plot_tune/"
 
     file_name = "track_beam_amplitude/da_scan/output*.txt"
@@ -350,9 +350,9 @@ def main():
     file_format = "icool_for009"
     plotter = PlotG4BL(plot_dir, 1e9)
     plotter.beta_limit = 1e4
-    plotter.min_p = 15
-    plotter.max_p = 41
-    plotter.min_n_cells = 10
+    plotter.min_p = 170
+    plotter.max_p = 230
+    plotter.min_n_cells = 50
     plotter.color_lambda = lambda data: data["subs"]["__momentum__"]
     plotter.load_data(run_dir_glob, co_file_name, file_name, file_format)
     plotter.do_plots()
